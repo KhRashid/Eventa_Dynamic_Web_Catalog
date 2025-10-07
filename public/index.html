@@ -35,7 +35,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Картотека площадок</title>
 
-  <!-- 1) ВСТАВЬ СВОЙ firebaseConfig СЮДА -->
+  <!-- 1) ВСТАВЬ СВОЙ firebaseConfig -->
   <script>
     window.__FIREBASE_CONFIG__ = {
       apiKey: "AIzaSyANblr6MInsVbY9LnN3OUHNA5Ri2ttPHCo",
@@ -107,8 +107,21 @@
 
     const fmt = (n) => new Intl.NumberFormat('ru-RU').format(n);
 
+    // --- безопасная нормализация media к массиву [{type,url}] ---
+    function normalizeMedia(m) {
+      if (!m) return [];
+      if (Array.isArray(m)) return m;
+      if (typeof m === 'string') return [{ type: 'image', url: m }];
+      if (typeof m === 'object') {
+        const url = m.url || m.image || m.src || m.link;
+        if (url) return [{ type: m.type || 'image', url }];
+      }
+      return [];
+    }
+
     function render(venues, meta) {
       $grid.innerHTML = '';
+      $status.innerHTML = '';
       if (meta?.note || meta?.expires_at) {
         const note = document.createElement('div');
         note.className = 'note';
@@ -122,28 +135,13 @@
       $empty.style.display = 'none';
 
       for (const v of venues) {
+        const mediaArr = normalizeMedia(v.media);
+        const cover = mediaArr.find(x => !x.type || x.type === 'image');
+
         const card = document.createElement('div');
         card.className = 'card';
-        //const media = (v.media||[]).find(m=>m.type==='image');
-        //====================================================================================
-        // Нормализуем media к массиву [{type,url}]
-        let mediaArr = [];
-        if (Array.isArray(v.media)) {
-          mediaArr = v.media;
-        } else if (typeof v.media === 'string' && v.media) {
-          mediaArr = [{ type: 'image', url: v.media }];
-        } else if (v.media && typeof v.media === 'object') {
-          // если прилетел объект {url:"..."} или {image:"..."}
-          const url = v.media.url || v.media.image || v.media.src;
-          if (url) mediaArr = [{ type: v.media.type || 'image', url }];
-        }
-        
-        // первая картинка (если есть)
-        const media = mediaArr.find(m => m && (m.type === 'image' || !m.type));
-        //====================================================================================
-
         card.innerHTML = `
-          ${media ? `<img class="img" src="${media.url}" alt="${v.name}" loading="lazy">` : `<div class="img"></div>`}
+          ${cover ? `<img class="img" src="${cover.url}" alt="${v.name||''}" loading="lazy">` : `<div class="img"></div>`}
           <div class="body">
             <div class="row">
               <div>
@@ -151,8 +149,14 @@
                 <div class="loc">${[v.city, v.district].filter(Boolean).join(', ')}</div>
               </div>
               <div style="text-align:right;font-size:14px;color:#475569">
-                ${v.price_min!=null && v.price_max!=null ? `от ${fmt(v.price_min)} – до ${fmt(v.price_max)} ${v.currency||''}` : ''}<br>
-                ${v.capacity_min!=null && v.capacity_max!=null ? `${fmt(v.capacity_min)}–${fmt(v.capacity_max)}` : ''}
+                ${
+                  (Number.isFinite(v.price_min) && Number.isFinite(v.price_max))
+                  ? `от ${fmt(v.price_min)} – до ${fmt(v.price_max)} ${v.currency||''}` : ''
+                }<br>
+                ${
+                  (Number.isFinite(v.capacity_min) && Number.isFinite(v.capacity_max))
+                  ? `${fmt(v.capacity_min)}–${fmt(v.capacity_max)}` : ''
+                }
               </div>
             </div>
             ${v.description ? `<p class="p">${v.description}</p>` : ''}
@@ -162,9 +166,8 @@
             </div>
           </div>
         `;
-        // простая галерея
         card.querySelector('[data-action="media"]')?.addEventListener('click', () => {
-          const list = mediaArr.map(m => m.type === 'image' ? m.url : `${m.url} (video)`).join('\n');
+          const list = mediaArr.map(m => m.type === 'image' || !m.type ? m.url : `${m.url} (video)`).join('\n');
           alert(list || 'Нет медиа');
         });
         $grid.appendChild(card);
@@ -193,7 +196,7 @@
       const exp = sData.expires_at?.toDate ? sData.expires_at.toDate() : (sData.expires_at ? new Date(sData.expires_at) : null);
       if (exp && exp < new Date()) { $status.textContent = 'Ссылка истекла'; return; }
 
-      const ids = sData.venue_ids || [];
+      const ids = Array.isArray(sData.venue_ids) ? sData.venue_ids : [];
       const venues = [];
       for (const id of ids) {
         const v = await getDoc(doc(db, COL.venues, id));
@@ -211,7 +214,8 @@
       }
     } catch (e) {
       console.error(e);
-      $status.textContent = 'Ошибка загрузки: ' + (e?.message || e);
+      const msg = (e && e.message) ? e.message : String(e);
+      $status.textContent = 'Ошибка загрузки: ' + msg;
     }
   </script>
 </body>
