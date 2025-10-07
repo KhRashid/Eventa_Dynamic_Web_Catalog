@@ -124,7 +124,24 @@
       for (const v of venues) {
         const card = document.createElement('div');
         card.className = 'card';
-        const media = (v.media||[]).find(m=>m.type==='image');
+        //const media = (v.media||[]).find(m=>m.type==='image');
+        //====================================================================================
+        // Нормализуем media к массиву [{type,url}]
+        let mediaArr = [];
+        if (Array.isArray(v.media)) {
+          mediaArr = v.media;
+        } else if (typeof v.media === 'string' && v.media) {
+          mediaArr = [{ type: 'image', url: v.media }];
+        } else if (v.media && typeof v.media === 'object') {
+          // если прилетел объект {url:"..."} или {image:"..."}
+          const url = v.media.url || v.media.image || v.media.src;
+          if (url) mediaArr = [{ type: v.media.type || 'image', url }];
+        }
+        
+        // первая картинка (если есть)
+        const media = mediaArr.find(m => m && (m.type === 'image' || !m.type));
+        //====================================================================================
+
         card.innerHTML = `
           ${media ? `<img class="img" src="${media.url}" alt="${v.name}" loading="lazy">` : `<div class="img"></div>`}
           <div class="body">
@@ -140,15 +157,15 @@
             </div>
             ${v.description ? `<p class="p">${v.description}</p>` : ''}
             <div class="btns">
-              ${(v.media||[]).length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
+              ${mediaArr.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
               ${v.location_url ? `<a class="btn" href="${v.location_url}" target="_blank" rel="noreferrer">Карта</a>` : ''}
             </div>
           </div>
         `;
         // простая галерея
         card.querySelector('[data-action="media"]')?.addEventListener('click', () => {
-          const imgs = (v.media||[]).map(m => m.type==='image' ? m.url : m.url + ' (video)').join('\n');
-          alert(imgs || 'Нет медиа');
+          const list = mediaArr.map(m => m.type === 'image' ? m.url : `${m.url} (video)`).join('\n');
+          alert(list || 'Нет медиа');
         });
         $grid.appendChild(card);
       }
