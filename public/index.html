@@ -1,11 +1,12 @@
-<!doctype html>
+<!--<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Картотека площадок</title>
-
+-->
   <!-- ВСТАВЬ СВОЙ firebaseConfig (из консоли) -->
+<!--
   <script>
     window.__FIREBASE_CONFIG__ = {
       apiKey: "AIzaSyANblr6MInsVbY9LnN3OUHNA5Ri2ttPHCo",
@@ -23,5 +24,178 @@
 <body>
   <h1 style="font-family:sans-serif">Готово! Сайт задеплоен на Firebase Hosting</h1>
   <p>Дальше сюда подключим страницу-каталог.</p>
+</body>
+</html>
+-->
+
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Картотека площадок</title>
+
+  <!-- 1) ВСТАВЬ СВОЙ firebaseConfig СЮДА -->
+  <script>
+    window.__FIREBASE_CONFIG__ = {
+      apiKey: "AIzaSyANblr6MInsVbY9LnN3OUHNA5Ri2ttPHCo",
+      authDomain: "ai-event-bot.firebaseapp.com",
+      databaseURL: "https://ai-event-bot-default-rtdb.firebaseio.com",
+      projectId: "ai-event-bot",
+      storageBucket: "ai-event-bot.firebasestorage.app",
+      messagingSenderId: "884896771261",
+      appId: "1:884896771261:web:b60d950938a924a71a5bd4",
+      measurementId: "G-4H9BVWN184"
+    };
+    window.__FIREBASE_COLLECTIONS__ = { venues: "venues", shortlists: "shortlists" };
+  </script>
+
+  <style>
+    :root { --bg:#f6f7fb; --card:#fff; --muted:#6b7280; --txt:#0f172a; --border:#e5e7eb; }
+    *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--txt)}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+    h1{margin:0 0 4px;font-size:28px}
+    .sub{color:var(--muted);margin:0 0 16px}
+    .status{margin:8px 0 16px;font-size:14px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgb(0 0 0 / 0.05)}
+    .img{height:180px;background:#eee;display:block;width:100%;object-fit:cover}
+    .body{padding:14px}
+    .row{display:flex;justify-content:space-between;gap:12px}
+    .loc{color:var(--muted);font-size:14px;display:flex;align-items:center;gap:6px}
+    .p{margin:8px 0 0;color:#334155;font-size:14px;line-height:1.35}
+    .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .btn{border:1px solid var(--border);background:white;border-radius:999px;padding:8px 12px;font-size:14px;cursor:pointer}
+    .btn:hover{background:#fafafa}
+    .footer{margin:24px 0 12px;color:var(--muted);font-size:12px;text-align:center}
+    .note{font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Картотека площадок</h1>
+    <p class="sub">Список площадок с Firebase. Персональная ссылка поддерживает <code>?shortlist=SLUG&token=TOKEN</code>.</p>
+    <div id="status" class="status"></div>
+    <div id="grid" class="grid"></div>
+    <div id="empty" style="display:none;color:#9ca3af;text-align:center;padding:40px 0">Ничего не найдено.</div>
+    <div class="footer">Demo: данные из Firestore. Медиа отображаются по URL.</div>
+  </div>
+
+  <!-- 2) Firebase через CDN (модульная версия) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+    const CFG = window.__FIREBASE_CONFIG__;
+    const COL = (window.__FIREBASE_COLLECTIONS__ || { venues:"venues", shortlists:"shortlists" });
+    const app = initializeApp(CFG);
+    const db  = getFirestore(app);
+
+    const $status = document.getElementById('status');
+    const $grid   = document.getElementById('grid');
+    const $empty  = document.getElementById('empty');
+
+    const qs = new URLSearchParams(location.search);
+    const shortlistSlug  = qs.get('shortlist');
+    const shortlistToken = qs.get('token');
+
+    const sha256Hex = async (text) => {
+      const enc = new TextEncoder().encode(text);
+      const buf = await crypto.subtle.digest('SHA-256', enc);
+      return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    };
+
+    const fmt = (n) => new Intl.NumberFormat('ru-RU').format(n);
+
+    function render(venues, meta) {
+      $grid.innerHTML = '';
+      if (meta?.note || meta?.expires_at) {
+        const note = document.createElement('div');
+        note.className = 'note';
+        note.textContent = `${meta?.note ? 'Комментарий: '+meta.note+'. ' : ''}${meta?.expires_at ? 'Действует до '+new Date(meta.expires_at).toLocaleString() : ''}`;
+        $status.appendChild(note);
+      }
+      if (!venues.length) {
+        $empty.style.display = 'block';
+        return;
+      }
+      $empty.style.display = 'none';
+
+      for (const v of venues) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const media = (v.media||[]).find(m=>m.type==='image');
+        card.innerHTML = `
+          ${media ? `<img class="img" src="${media.url}" alt="${v.name}" loading="lazy">` : `<div class="img"></div>`}
+          <div class="body">
+            <div class="row">
+              <div>
+                <div style="font-weight:600;font-size:18px">${v.name||''}</div>
+                <div class="loc">${[v.city, v.district].filter(Boolean).join(', ')}</div>
+              </div>
+              <div style="text-align:right;font-size:14px;color:#475569">
+                ${v.price_min!=null && v.price_max!=null ? `от ${fmt(v.price_min)} – до ${fmt(v.price_max)} ${v.currency||''}` : ''}<br>
+                ${v.capacity_min!=null && v.capacity_max!=null ? `${fmt(v.capacity_min)}–${fmt(v.capacity_max)}` : ''}
+              </div>
+            </div>
+            ${v.description ? `<p class="p">${v.description}</p>` : ''}
+            <div class="btns">
+              ${(v.media||[]).length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
+              ${v.location_url ? `<a class="btn" href="${v.location_url}" target="_blank" rel="noreferrer">Карта</a>` : ''}
+            </div>
+          </div>
+        `;
+        // простая галерея
+        card.querySelector('[data-action="media"]')?.addEventListener('click', () => {
+          const imgs = (v.media||[]).map(m => m.type==='image' ? m.url : m.url + ' (video)').join('\n');
+          alert(imgs || 'Нет медиа');
+        });
+        $grid.appendChild(card);
+      }
+    }
+
+    async function loadAllVenues() {
+      $status.textContent = 'Загрузка данных из Firebase…';
+      const snap = await getDocs(collection(db, COL.venues));
+      const venues = [];
+      snap.forEach(d => venues.push({ id: d.id, ...d.data() }));
+      $status.textContent = '';
+      render(venues);
+    }
+
+    async function loadShortlist(slug, token) {
+      $status.textContent = 'Загрузка персонального шортлиста…';
+      const sDoc = await getDoc(doc(db, COL.shortlists, slug));
+      if (!sDoc.exists()) { $status.textContent = 'Шортлист не найден'; return; }
+      const sData = sDoc.data();
+      if (sData.token && sData.token !== token) { $status.textContent = 'Неверный токен'; return; }
+      if (sData.token_hash) {
+        const h = await sha256Hex(token || '');
+        if (h !== sData.token_hash) { $status.textContent = 'Неверный токен'; return; }
+      }
+      const exp = sData.expires_at?.toDate ? sData.expires_at.toDate() : (sData.expires_at ? new Date(sData.expires_at) : null);
+      if (exp && exp < new Date()) { $status.textContent = 'Ссылка истекла'; return; }
+
+      const ids = sData.venue_ids || [];
+      const venues = [];
+      for (const id of ids) {
+        const v = await getDoc(doc(db, COL.venues, id));
+        if (v.exists()) venues.push({ id: v.id, ...v.data() });
+      }
+      $status.textContent = '';
+      render(venues, { note: sData.note, expires_at: exp?.toISOString() });
+    }
+
+    try {
+      if (shortlistSlug && shortlistToken) {
+        await loadShortlist(shortlistSlug, shortlistToken);
+      } else {
+        await loadAllVenues();
+      }
+    } catch (e) {
+      console.error(e);
+      $status.textContent = 'Ошибка загрузки: ' + (e?.message || e);
+    }
+  </script>
 </body>
 </html>
