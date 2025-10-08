@@ -101,7 +101,20 @@
     <div id="empty" style="display:none;color:#9ca3af;text-align:center;padding:40px 0">Ничего не найдено.</div>
     <div class="footer">Demo: данные из Firestore. Медиа отображаются по URL.</div>
   </div>
-
+  
+  <!-- Gallery modal -->
+  <div id="gallery" class="gallery-backdrop" aria-hidden="true">
+    <div class="gallery-wrap">
+      <div class="gallery-stage">
+        <img id="gallery-img" class="gallery-img" alt="">
+        <button id="gallery-close" class="gallery-close" title="Закрыть">✕</button>
+        <button id="gallery-prev"  class="gallery-prev"  title="Назад">❮</button>
+        <button id="gallery-next"  class="gallery-next  title="Вперёд">❯</button>
+      </div>
+      <div id="gallery-strip" class="gallery-strip"></div>
+    </div>
+  </div>
+  
   <!-- 2) Firebase через CDN (модульная версия) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
@@ -249,6 +262,67 @@
       const msg = (e && e.message) ? e.message : String(e);
       $status.textContent = 'Ошибка загрузки: ' + msg;
     }
+
+    // ---- Gallery logic ----
+    const $g      = document.getElementById('gallery');
+    const $gImg   = document.getElementById('gallery-img');
+    const $gStrip = document.getElementById('gallery-strip');
+    const $gPrev  = document.getElementById('gallery-prev');
+    const $gNext  = document.getElementById('gallery-next');
+    const $gClose = document.getElementById('gallery-close');
+    
+    let galleryUrls = [];
+    let galleryIndex = 0;
+    let touchStartX = null;
+    
+    function openGallery(urls, startIdx=0){
+      galleryUrls = urls.filter(Boolean);
+      if (!galleryUrls.length) return;
+      galleryIndex = Math.min(Math.max(0, startIdx), galleryUrls.length-1);
+      renderGallery();
+      $g.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeGallery(){
+      $g.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+    function renderGallery(){
+      $gImg.src = galleryUrls[galleryIndex];
+      // thumbs
+      $gStrip.innerHTML = '';
+      galleryUrls.forEach((u,i)=>{
+        const img = document.createElement('img');
+        img.className = 'gallery-thumb' + (i===galleryIndex ? ' active' : '');
+        img.src = u;
+        img.addEventListener('click', ()=>{ galleryIndex=i; renderGallery(); });
+        $gStrip.appendChild(img);
+      });
+    }
+    function nextImg(){ galleryIndex = (galleryIndex+1) % galleryUrls.length; renderGallery(); }
+    function prevImg(){ galleryIndex = (galleryIndex-1+galleryUrls.length) % galleryUrls.length; renderGallery(); }
+    
+    $gNext.addEventListener('click', nextImg);
+    $gPrev.addEventListener('click', prevImg);
+    $gClose.addEventListener('click', closeGallery);
+    $g.addEventListener('click', (e)=>{ if(e.target===$g) closeGallery(); });
+    
+    window.addEventListener('keydown', (e)=>{
+      if(!$g.classList.contains('show')) return;
+      if(e.key==='Escape') closeGallery();
+      if(e.key==='ArrowRight') nextImg();
+      if(e.key==='ArrowLeft') prevImg();
+    });
+    
+    // touch swipe
+    $g.addEventListener('touchstart', (e)=>{ touchStartX = e.changedTouches[0].clientX; }, {passive:true});
+    $g.addEventListener('touchend', (e)=>{
+      if(touchStartX==null) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      if(Math.abs(dx) > 40) { dx<0 ? nextImg() : prevImg(); }
+      touchStartX = null;
+    }, {passive:true});
+
   </script>
 </body>
 </html>
