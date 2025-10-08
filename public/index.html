@@ -50,6 +50,7 @@
     window.__FIREBASE_COLLECTIONS__ = { venues: "venues", shortlists: "shortlists" };
   </script>
 
+  <!--
   <style>
     :root { --bg:#f6f7fb; --card:#fff; --muted:#6b7280; --txt:#0f172a; --border:#e5e7eb; }
     *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--txt)}
@@ -70,6 +71,26 @@
     .footer{margin:24px 0 12px;color:var(--muted);font-size:12px;text-align:center}
     .note{font-size:12px;color:var(--muted)}
   </style>
+  -->
+  <style>
+  /* --- Gallery modal --- */
+  .gallery-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:50}
+  .gallery-backdrop.show{display:flex}
+  .gallery-wrap{max-width:min(1200px,96vw);max-height:90vh;display:flex;flex-direction:column;gap:10px}
+  .gallery-stage{position:relative;background:#000;border-radius:12px;overflow:hidden}
+  .gallery-img{max-width:96vw;max-height:70vh;display:block;margin:0 auto}
+  .gallery-close,.gallery-prev,.gallery-next{
+    position:absolute;top:10px;border:none;background:rgba(255,255,255,.15);color:#fff;
+    width:40px;height:40px;border-radius:999px;cursor:pointer;font-size:18px;backdrop-filter:blur(2px)
+  }
+  .gallery-close{right:10px}
+  .gallery-prev{left:10px;top:50%;transform:translateY(-50%)}
+  .gallery-next{right:10px;top:50%;transform:translateY(-50%)}
+  .gallery-strip{display:flex;gap:8px;overflow-x:auto;padding:6px;background:#0b0b0b;border-radius:12px}
+  .gallery-thumb{width:80px;height:60px;object-fit:cover;border-radius:8px;opacity:.6;border:2px solid transparent;cursor:pointer}
+  .gallery-thumb.active{opacity:1;border-color:#fff}
+</style>
+
 </head>
 <body>
   <div class="wrap">
