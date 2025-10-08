@@ -210,11 +210,15 @@
           </div>
         `;
     
-        // Обработчик кнопки «Медиа»: покажем все URL (потом заменим на модалку/галерею)
-        card.querySelector('[data-action="media"]')?.addEventListener('click', () => {
-          alert(allMediaUrls.join('\n') || 'Нет медиа');
-        });
-    
+        // кнопка «Медиа» → открываем модалку-галерею
+        const mediaBtn = card.querySelector('[data-action="media"]');
+        mediaBtn?.addEventListener('click', () => openGallery(allMediaUrls, 0));
+        
+        // клик по обложке (если есть медиа)
+        const coverEl = card.querySelector('.img');
+        coverEl?.addEventListener('click', () => { if (allMediaUrls.length) openGallery(allMediaUrls, 0); });
+        coverEl && (coverEl.style.cursor = allMediaUrls.length ? 'zoom-in' : 'default');
+
         $grid.appendChild(card);
       }
     }
