@@ -133,15 +133,24 @@
         return;
       }
       $empty.style.display = 'none';
-
+    
       for (const v of venues) {
+        // 1) Берём первую фотку из media.photos как обложку (если есть)
+        let coverUrl = Array.isArray(v.media?.photos) && v.media.photos.length ? v.media.photos[0] : null;
+    
+        // 2) Универсальная нормализация (на случай другой схемы)
         const mediaArr = normalizeMedia(v.media);
-        const cover = mediaArr.find(x => !x.type || x.type === 'image');
-
+        if (!coverUrl && mediaArr.length) coverUrl = mediaArr[0]?.url || null;
+    
+        // 3) Список всех медиа для кнопки «Медиа»
+        const allPhotoUrls = Array.isArray(v.media?.photos) ? v.media.photos.filter(Boolean) : [];
+        const fallbackUrls = mediaArr.map(m => m?.url).filter(Boolean);
+        const allMediaUrls = [...allPhotoUrls, ...fallbackUrls];
+    
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
-          ${cover ? `<img class="img" src="${cover.url}" alt="${v.name||''}" loading="lazy">` : `<div class="img"></div>`}
+          ${coverUrl ? `<img class="img" src="${coverUrl}" alt="${v.name||''}" loading="lazy">` : `<div class="img"></div>`}
           <div class="body">
             <div class="row">
               <div>
@@ -161,19 +170,21 @@
             </div>
             ${v.description ? `<p class="p">${v.description}</p>` : ''}
             <div class="btns">
-              ${mediaArr.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
+              ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
               ${v.location_url ? `<a class="btn" href="${v.location_url}" target="_blank" rel="noreferrer">Карта</a>` : ''}
             </div>
           </div>
         `;
+    
+        // Обработчик кнопки «Медиа»: покажем все URL (потом заменим на модалку/галерею)
         card.querySelector('[data-action="media"]')?.addEventListener('click', () => {
-          const list = mediaArr.map(m => m.type === 'image' || !m.type ? m.url : `${m.url} (video)`).join('\n');
-          alert(list || 'Нет медиа');
+          alert(allMediaUrls.join('\n') || 'Нет медиа');
         });
+    
         $grid.appendChild(card);
       }
     }
-
+    
     async function loadAllVenues() {
       $status.textContent = 'Загрузка данных из Firebase…';
       const snap = await getDocs(collection(db, COL.venues));
