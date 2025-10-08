@@ -60,11 +60,28 @@
     .gallery-strip{display:flex;gap:8px;overflow-x:auto;padding:6px;background:#0b0b0b;border-radius:12px}
     .gallery-thumb{width:80px;height:60px;object-fit:cover;border-radius:8px;opacity:.6;border:2px solid transparent;cursor:pointer}
     .gallery-thumb.active{opacity:1;border-color:#fff}
+
+    .select-dot{
+      position:absolute;top:10px;left:10px;width:22px;height:22px;border-radius:999px;
+      border:2px solid #fff;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;
+      color:#fff;font-size:14px;cursor:pointer;user-select:none
+    }
+    .card.sel{outline:2px solid #2563eb}
+    .card-wrap{position:relative}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Картотека площадок</h1>
+    <div id="toolbar" style="display:flex;gap:10px;align-items:center;margin:10px 0 16px;">
+      <label style="display:flex;gap:8px;align-items:center;">
+        <input id="modeToggle" type="checkbox">
+        <span>Режим подбора</span>
+      </label>
+      <button id="genBtn" class="btn" disabled>Сгенерировать ссылку</button>
+      <span id="selCount" style="color:#6b7280;font-size:14px">Выбрано: 0</span>
+    </div>
+
     <p class="sub">Список площадок с Firebase. Персональная ссылка поддерживает <code>?shortlist=SLUG&token=TOKEN</code>.</p>
     <div id="status" class="status"></div>
     <div id="grid" class="grid"></div>
@@ -88,12 +105,15 @@
   <!-- 2) Firebase через CDN (модульная версия) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, getDoc, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
     const CFG = window.__FIREBASE_CONFIG__;
     const COL = (window.__FIREBASE_COLLECTIONS__ || { venues:"venues", shortlists:"shortlists" });
     const app = initializeApp(CFG);
     const db  = getFirestore(app);
+    const auth = getAuth(app);
+    signInAnonymously(auth).catch(console.error);
 
     const $status = document.getElementById('status');
     const $grid   = document.getElementById('grid');
@@ -123,7 +143,54 @@
       return [];
     }
 
+    const selected = new Set();
+    let pickMode = false;
+    const $modeToggle = document.getElementById('modeToggle');
+    const $genBtn     = document.getElementById('genBtn');
+    const $selCount   = document.getElementById('selCount');
+    
+    $modeToggle.addEventListener('change', () => {
+      pickMode = $modeToggle.checked;
+      selected.clear();
+      $selCount.textContent = 'Выбрано: 0';
+      $genBtn.disabled = true;
+      // перерисуем карточки, чтобы показать кружочки выбора
+      rerender();
+    });
+    
+    $genBtn.addEventListener('click', async () => {
+      if (!selected.size) return;
+      const ids = Array.from(selected);
+      // создаём slug и токен
+      const slug  = Math.random().toString(36).slice(2, 8);
+      const token = Math.random().toString(36).slice(2, 10);
+      // срок действия 7 дней
+      const expiresAt = new Date(Date.now() + 7*24*60*60*1000);
+    
+      // сохраняем в Firestore
+      await setDoc(doc(db, COL.shortlists, slug), {
+        venue_ids: ids,
+        token_hash: await sha256Hex(token),   // храним хэш
+        note: 'Подбор от ' + new Date().toLocaleString(),
+        created_at: serverTimestamp(),
+        expires_at: expiresAt
+      });
+    
+      const url = `${location.origin}/?shortlist=${slug}&token=${token}`;
+      await navigator.clipboard.writeText(url).catch(()=>{});
+      alert('Ссылка сгенерирована и скопирована:\n' + url);
+    });
+
+    function rerender(){
+      // перерисуем по текущим данным — повторно дергать Firestore не нужно,
+      // просто вызовем render с теми же venues.
+      if (window.__lastVenues) render(window.__lastVenues, window.__lastMeta);
+    }
+
     function render(venues, meta) {
+      window.__lastVenues = venues;
+      window.__lastMeta   = meta || null;
+
       $grid.innerHTML = '';
       $status.innerHTML = '';
       if (meta?.note || meta?.expires_at) {
@@ -153,6 +220,26 @@
     
         const card = document.createElement('div');
         card.className = 'card';
+        const wrap = document.createElement('div');
+        wrap.className = 'card-wrap';
+        wrap.appendChild(card);
+
+        // кружок выбора (виден только в режиме подбора)
+        if (pickMode) {
+          const dot = document.createElement('div');
+          dot.className = 'select-dot';
+          dot.textContent = selected.has(v.id) ? '✓' : '';
+          dot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (selected.has(v.id)) selected.delete(v.id); else selected.add(v.id);
+            dot.textContent = selected.has(v.id) ? '✓' : '';
+            card.classList.toggle('sel', selected.has(v.id));
+            $selCount.textContent = 'Выбрано: ' + selected.size;
+            $genBtn.disabled = selected.size === 0;
+          });
+          wrap.appendChild(dot);
+        }
+        
         card.innerHTML = `
           ${coverUrl ? `<img class="img" src="${coverUrl}" alt="${v.name||''}" loading="lazy">` : `<div class="img"></div>`}
           <div class="body">
@@ -179,17 +266,24 @@
             </div>
           </div>
         `;
-    
+
+        card.classList.toggle('sel', selected.has(v.id));
+        
         // кнопка «Медиа» → открываем модалку-галерею
         const mediaBtn = card.querySelector('[data-action="media"]');
         mediaBtn?.addEventListener('click', () => openGallery(allMediaUrls, 0));
         
         // клик по обложке (если есть медиа)
         const coverEl = card.querySelector('.img');
-        coverEl?.addEventListener('click', () => { if (allMediaUrls.length) openGallery(allMediaUrls, 0); });
-        coverEl && (coverEl.style.cursor = allMediaUrls.length ? 'zoom-in' : 'default');
+        coverEl?.addEventListener('click', () => {
+          if (pickMode) return;
+          if (allMediaUrls.length) openGallery(allMediaUrls, 0);
+        });
+        //coverEl && (coverEl.style.cursor = allMediaUrls.length ? 'zoom-in' : 'default');
+        coverEl && (coverEl.style.cursor = pickMode ? 'pointer' : (allMediaUrls.length ? 'zoom-in' : 'default'));
 
-        $grid.appendChild(card);
+        //$grid.appendChild(card);
+        $grid.appendChild(wrap);
       }
     }
     
