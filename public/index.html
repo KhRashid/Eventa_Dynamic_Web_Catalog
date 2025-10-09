@@ -312,7 +312,7 @@
   
           const allPhotoUrls = Array.isArray(v.media?.photos) ? v.media.photos.filter(Boolean) : [];
           const fallbackUrls = mediaArr.map(m => m?.url).filter(Boolean);
-          const allMediaUrls = [...allPhotoUrls, ...fallbackUrls];
+          const allMediaUrls = Array.from(new Set([...allPhotoUrls, ...fallbackUrls]));
   
           const card = document.createElement('div');
           card.className = 'card';
