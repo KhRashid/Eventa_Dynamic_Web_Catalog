@@ -180,7 +180,10 @@
     // === CONFIG ===
     const CFG = window.__FIREBASE_CONFIG__;
     const COL = (window.__FIREBASE_COLLECTIONS__ || { venues:"venues", shortlists:"shortlists" });
-  
+
+    // === refs для фильтров (объявляем заранее!)
+    let $fSearch, $fDistrict, $fCap, $fPrice;
+    
     // === GLOBALS ===
     let db, auth;
     let pickMode = false;
@@ -238,6 +241,7 @@
 
     let filtersBound = false;
 
+    /*
     function bindFilterEventsOnce() {
       if (filtersBound) return;
       filtersBound = true;
@@ -251,7 +255,15 @@
         el.addEventListener('input', applyFilters)
       );
     }
-
+    */
+    function bindFilterEventsOnce(){
+      if(filtersBound || !$fSearch) return;
+      filtersBound = true;
+      const debounce = (fn,ms=200)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
+      $fSearch.addEventListener('input', debounce(applyFilters,200));
+      [$fDistrict,$fCap,$fPrice].forEach(el=> el.addEventListener('input', applyFilters));
+    }
+    
     // ждём DOM — тут мы берём все элементы и вешаем обработчики
     window.addEventListener('DOMContentLoaded', async () => {
       // Firebase
@@ -282,11 +294,16 @@
       const $gClose = document.getElementById('gallery-close');
       let galleryUrls = [];
       let galleryIndex = 0;
-
+      /*
       const $fSearch = document.getElementById('fSearch');
       const $fDistrict = document.getElementById('fDistrict');
       const $fCap = document.getElementById('fCap');
       const $fPrice = document.getElementById('fPrice');
+      */
+      $fSearch   = document.getElementById('fSearch');
+      $fDistrict = document.getElementById('fDistrict');
+      $fCap      = document.getElementById('fCap');
+      $fPrice    = document.getElementById('fPrice');
       
       let _allVenues = [];   // полный список
       let _viewVenues = [];  // после фильтрации
@@ -396,16 +413,20 @@
       function parseRange(text){
         if(!text) return [null,null];
         const m = (text.replace(/\s/g,'').match(/^(\d+)?-?(\d+)?$/) || []);
+        /*
         const lo = m[1] ? +m[1] : null;
         const hi = m[2] ? +m[2] : null;
         return [lo, hi];
+        */
+        return [m[1]?+m[1]:null, m[2]?+m[2]:null];
       }
       
       function strIncludes(hay, needle){
         return hay.toLowerCase().includes(needle.toLowerCase());
       }
-      
+      /*
       function applyFilters(){
+        if(!$fSearch) return;                       // на всякий случай
         const q = ($fSearch.value||'').trim();
         const dist = $fDistrict.value||'';
         const [capLo, capHi]   = parseRange(($fCap.value||'').trim());
@@ -451,7 +472,48 @@
         const newUrl = `${location.pathname}?${params.toString()}`;
         history.replaceState(null,'',newUrl);
       }
+      */
 
+      function applyFilters(){
+        if(!$fSearch) return;                       // на всякий случай
+        const q = ($fSearch.value||'').trim().toLowerCase();
+        const dist = $fDistrict.value||'';
+        const [capLo,capHi]     = parseRange(($fCap.value||'').trim());
+        const [priceLo,priceHi] = parseRange(($fPrice.value||'').trim());
+      
+        _viewVenues = _allVenues.filter(v=>{
+          if(q){
+            const hay = [v.name,v.city,v.district,(v.tags||[]).join(' '),v.description]
+                        .filter(Boolean).join(' ').toLowerCase();
+            if(!hay.includes(q)) return false;
+          }
+          if(dist && v.district!==dist) return false;
+      
+          if(capLo!=null || capHi!=null){
+            const vLo = +v.capacity_min||0, vHi = +v.capacity_max||0;
+            if(capLo!=null && vHi<capLo) return false;
+            if(capHi!=null && vLo>capHi) return false;
+          }
+          if(priceLo!=null || priceHi!=null){
+            const pLo = +v.price_min||0, pHi = +v.price_max||0;
+            if(priceLo!=null && pHi<priceLo) return false;
+            if(priceHi!=null && pLo>priceHi) return false;
+          }
+          return true;
+        });
+      
+        render(_viewVenues, window.__lastMeta);
+      
+        // синхронизация в URL
+        const params = new URLSearchParams(location.search);
+        q ? params.set('q', q) : params.delete('q');
+        dist ? params.set('d', dist) : params.delete('d');
+        $fCap.value   ? params.set('cap', $fCap.value.trim())     : params.delete('cap');
+        $fPrice.value ? params.set('price', $fPrice.value.trim()) : params.delete('price');
+        const newUrl = `${location.pathname}?${params.toString()}`;
+        history.replaceState(null,'',newUrl);
+      }
+      
       // РЕНДЕР
       function render(venues, meta){
         window.__lastVenues = venues;
@@ -547,6 +609,7 @@
       }
 
       function populateDistricts(list){
+        if(!$fDistrict) return;
         const districts = Array.from(new Set(list.map(v=>v.district).filter(Boolean))).sort();
         $fDistrict.innerHTML =
           '<option value="">Все районы</option>' +
@@ -554,6 +617,7 @@
       }
       
       function restoreFiltersFromURL(){
+        if(!$fSearch) return;
         const ps = new URLSearchParams(location.search);
         $fSearch.value  = ps.get('q')    || '';
         $fDistrict.value= ps.get('d')    || '';
