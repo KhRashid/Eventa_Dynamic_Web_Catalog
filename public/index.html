@@ -529,7 +529,22 @@
           card.classList.toggle('sel', selected.has(v.id));
         }
       }
-  
+
+      function populateDistricts(list){
+        const districts = Array.from(new Set(list.map(v=>v.district).filter(Boolean))).sort();
+        $fDistrict.innerHTML =
+          '<option value="">Все районы</option>' +
+          districts.map(d=>`<option value="${d}">${d}</option>`).join('');
+      }
+      
+      function restoreFiltersFromURL(){
+        const ps = new URLSearchParams(location.search);
+        $fSearch.value  = ps.get('q')    || '';
+        $fDistrict.value= ps.get('d')    || '';
+        $fCap.value     = ps.get('cap')  || '';
+        $fPrice.value   = ps.get('price')|| '';
+      }
+
       // ЗАГРУЗКА ДАННЫХ
       async function loadAllVenues() {
         $status.textContent = 'Загрузка данных из Firebase…';
@@ -550,6 +565,8 @@
         
         // сохраним полный список и применим фильтр
         _allVenues = venues.slice();
+        populateDistricts(_allVenues);
+        restoreFiltersFromURL();
         applyFilters();
         
         // события
@@ -578,8 +595,14 @@
           if (v.exists()) venues.push({ id: v.id, ...v.data() });
         }
         $status.textContent = '';
-        _allVenues = venues.slice();
-        applyFilters();
+        _allVenues = venues.slice();            // <- источник для фильтров = подмножество шортлиста
+        populateDistricts(_allVenues);          // <- опции районов именно по выбранным площадкам
+        restoreFiltersFromURL();                // <- восстановим q/d/cap/price из URL (если есть)
+        window.__lastMeta = {                   // <- чтобы render показывал заметку и срок
+          note: sData.note,
+          expires_at: exp?.toISOString()
+        };
+        applyFilters();                         // <- запускаем фильтрацию и отрисовку
 
         render(venues, { note: sData.note, expires_at: exp?.toISOString() });
       }
