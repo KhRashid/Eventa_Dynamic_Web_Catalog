@@ -79,6 +79,11 @@
         <span>Режим подбора</span>
       </label>
       <button id="genBtn" class="btn" disabled>Сгенерировать ссылку</button>
+      <span id="shareBox" style="margin-left:8px; display:none; gap:8px; align-items:center;">
+        <button id="copyBtn" class="btn">Скопировать</button>
+        <a id="waBtn" class="btn" target="_blank" rel="noreferrer">WhatsApp</a>
+        <a id="tgBtn" class="btn" target="_blank" rel="noreferrer">Telegram</a>
+      </span>
       <span id="selCount" style="color:#6b7280;font-size:14px">Выбрано: 0</span>
     </div>
 
@@ -101,7 +106,12 @@
       <div id="gallery-strip" class="gallery-strip"></div>
     </div>
   </div>
-  
+
+  <div id="toast" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+  background:#111;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:60">
+    Скопировано
+  </div>
+
   <!-- 2) Firebase через CDN (модульная версия) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
@@ -130,6 +140,18 @@
     };
 
     const fmt = (n) => new Intl.NumberFormat('ru-RU').format(n);
+
+    const $shareBox = document.getElementById('shareBox');
+    const $copyBtn  = document.getElementById('copyBtn');
+    const $waBtn    = document.getElementById('waBtn');
+    const $tgBtn    = document.getElementById('tgBtn');
+    const $toast    = document.getElementById('toast');
+    
+    function showToast(text='Скопировано') {
+      $toast.textContent = text;
+      $toast.style.opacity = '1';
+      setTimeout(()=> $toast.style.opacity = '0', 1500);
+    }
 
     // --- безопасная нормализация media к массиву [{type,url}] ---
     function normalizeMedia(m) {
@@ -177,6 +199,28 @@
       });
     
       const url = `${location.origin}/?shortlist=${slug}&token=${token}`;
+
+      // показать блок шаринга
+      $shareBox.style.display = 'inline-flex';
+      
+      // подготовить кнопки
+      const enc = encodeURIComponent(url);
+      $waBtn.href = `https://wa.me/?text=${enc}`;
+      $tgBtn.href = `https://t.me/share/url?url=${enc}`;
+      
+      $copyBtn.onclick = async () => {
+        const ok = await copyToClipboard(url);
+        showToast(ok ? 'Скопировано' : 'Скопируйте вручную');
+      };
+      
+      // если браузер поддерживает Web Share API — предложим нативный share по клику на кнопку генерации (опционально)
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Подбор площадок', url }); }
+        catch (_) {} // пользователь мог отменить — ок
+      }
+      
+      // финальный alert оставляем как fallback
+
       await navigator.clipboard.writeText(url).catch(()=>{});
       alert('Ссылка сгенерирована и скопирована:\n' + url);
     });
