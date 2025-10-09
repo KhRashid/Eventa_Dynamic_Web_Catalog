@@ -73,19 +73,23 @@
 <body>
   <div class="wrap">
     <h1>Картотека площадок</h1>
-    <div id="toolbar" style="display:flex;gap:10px;align-items:center;margin:10px 0 16px;">
-      <label style="display:flex;gap:8px;align-items:center;">
-        <input id="modeToggle" type="checkbox">
-        <span>Режим подбора</span>
-      </label>
-      <button id="genBtn" class="btn" disabled>Сгенерировать ссылку</button>
-      <span id="shareBox" style="margin-left:8px; display:none; gap:8px; align-items:center;">
-        <button id="copyBtn" type="button" class="btn">Скопировать</button>
-        <a id="waBtn" class="btn" target="_blank" rel="noreferrer">WhatsApp</a>
-        <a id="tgBtn" class="btn" target="_blank" rel="noreferrer">Telegram</a>
-      </span>
-      <span id="selCount" style="color:#6b7280;font-size:14px">Выбрано: 0</span>
-    </div>
+      <div id="toolbar" style="display:flex;gap:10px;align-items:center;margin:10px 0 16px;flex-wrap:wrap">
+        <label style="display:flex;gap:8px;align-items:center;">
+          <input id="modeToggle" type="checkbox">
+          <span>Режим подбора</span>
+        </label>
+      
+        <button id="genBtn" type="button" class="btn" disabled>Сгенерировать ссылку</button>
+      
+        <!-- Блок шаринга появляется после генерации -->
+        <span id="shareBox" style="display:none;gap:8px;align-items:center;">
+          <button id="copyBtn" type="button" class="btn">Скопировать</button>
+          <a id="waBtn" class="btn" target="_blank" rel="noreferrer">WhatsApp</a>
+          <a id="tgBtn" class="btn" target="_blank" rel="noreferrer">Telegram</a>
+        </span>
+      
+        <span id="selCount" style="color:#6b7280;font-size:14px">Выбрано: 0</span>
+      </div>
 
     <p class="sub">Список площадок с Firebase. Персональная ссылка поддерживает <code>?shortlist=SLUG&token=TOKEN</code>.</p>
     <div id="status" class="status"></div>
@@ -140,19 +144,50 @@
     };
 
     const fmt = (n) => new Intl.NumberFormat('ru-RU').format(n);
-
+    
+    // ---------- COPY & SHARE ----------
+    let lastGeneratedUrl = "";
+    
+    const $modeToggle = document.getElementById('modeToggle');
+    const $genBtn     = document.getElementById('genBtn');
+    const $selCount   = document.getElementById('selCount');
+    
     const $shareBox = document.getElementById('shareBox');
     const $copyBtn  = document.getElementById('copyBtn');
     const $waBtn    = document.getElementById('waBtn');
     const $tgBtn    = document.getElementById('tgBtn');
     const $toast    = document.getElementById('toast');
 
-    let lastGeneratedUrl = "";
+    // защитимся от случая, если элементов нет
+    if (!$genBtn || !$copyBtn || !$shareBox) {
+      console.error('Toolbar elements not found. Check IDs: genBtn, copyBtn, shareBox.');
+    }
 
     function showToast(text='Скопировано') {
+      if (!$toast) return;
       $toast.textContent = text;
       $toast.style.opacity = '1';
-      setTimeout(()=> $toast.style.opacity = '0', 1500);
+      setTimeout(()=> $toast.style.opacity = '0', 1400);
+    }
+
+    async function copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_) {}
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (_) {
+        return false;
+      }
     }
 
     // --- безопасная нормализация media к массиву [{type,url}] ---
@@ -181,9 +216,13 @@
       // перерисуем карточки, чтобы показать кружочки выбора
       rerender();
     });
-    
+
+    // ОБРАБОТЧИК КНОПКИ "СКОПИРОВАТЬ" — ВЕШАЕМ ОДИН РАЗ
     $copyBtn.addEventListener('click', async () => {
-      if (!lastGeneratedUrl) return;  // ссылки ещё нет
+        if (!lastGeneratedUrl) {
+          alert('Сначала сгенерируйте ссылку.');
+          return;
+        }
       const ok = await copyToClipboard(lastGeneratedUrl);
       showToast(ok ? 'Скопировано' : 'Скопируйте вручную');
     });
@@ -207,20 +246,23 @@
       });
     
       const url = `${location.origin}/?shortlist=${slug}&token=${token}`;
-      lastGeneratedUrl = url;                         // <— сохраняем
-
-      // показать блок шаринга
-      $shareBox.style.display = 'inline-flex';
+      lastGeneratedUrl = url;                    // сохраняем для кнопки "Скопировать"
+      $shareBox.style.display = 'inline-flex';   // показываем блок шаринга
       
       // подготовить кнопки
       const enc = encodeURIComponent(url);
       $waBtn.href = `https://wa.me/?text=${enc}`;
       $tgBtn.href = `https://t.me/share/url?url=${enc}`;
+
+      // пробуем сразу скопировать
+      const copied = await copyToClipboard(url);
+      if (copied) showToast('Скопировано');
+      else alert('Ссылка сгенерирована:\n' + url);
       
-      $copyBtn.onclick = async () => {
-        const ok = await copyToClipboard(url);
-        showToast(ok ? 'Скопировано' : 'Скопируйте вручную');
-      };
+      //$copyBtn.onclick = async () => {
+      //  const ok = await copyToClipboard(url);
+      //  showToast(ok ? 'Скопировано' : 'Скопируйте вручную');
+      //};
       
       // если браузер поддерживает Web Share API — предложим нативный share по клику на кнопку генерации (опционально)
       if (navigator.share) {
