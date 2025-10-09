@@ -235,7 +235,23 @@
       }
       return [];
     }
-  
+
+    let filtersBound = false;
+
+    function bindFilterEventsOnce() {
+      if (filtersBound) return;
+      filtersBound = true;
+      // debounce можно свой, если уже есть — используй его
+      const debounce = (fn, ms=200) => {
+        let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
+      };
+    
+      $fSearch.addEventListener('input', debounce(applyFilters, 200));
+      [$fDistrict, $fCap, $fPrice].forEach(el =>
+        el.addEventListener('input', applyFilters)
+      );
+    }
+
     // ждём DOM — тут мы берём все элементы и вешаем обработчики
     window.addEventListener('DOMContentLoaded', async () => {
       // Firebase
@@ -567,6 +583,7 @@
         _allVenues = venues.slice();
         populateDistricts(_allVenues);
         restoreFiltersFromURL();
+        bindFilterEventsOnce();     // <-- ВАЖНО
         applyFilters();
         
         // события
@@ -594,7 +611,9 @@
           const v = await getDoc(doc(db, COL.venues, id));
           if (v.exists()) venues.push({ id: v.id, ...v.data() });
         }
+        
         $status.textContent = '';
+        
         _allVenues = venues.slice();            // <- источник для фильтров = подмножество шортлиста
         populateDistricts(_allVenues);          // <- опции районов именно по выбранным площадкам
         restoreFiltersFromURL();                // <- восстановим q/d/cap/price из URL (если есть)
@@ -602,6 +621,7 @@
           note: sData.note,
           expires_at: exp?.toISOString()
         };
+        bindFilterEventsOnce();                              // <-- ВАЖНО
         applyFilters();                         // <- запускаем фильтрацию и отрисовку
 
         render(venues, { note: sData.note, expires_at: exp?.toISOString() });
