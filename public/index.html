@@ -115,7 +115,51 @@
   background:#111;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:60">
     Скопировано
   </div>
+
+  <!-- Link Config Modal -->
+  <div id="linkConfig" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:70">
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:92vw;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;font-size:18px">Параметры ссылки</div>
+        <button id="cfgClose" type="button" style="border:none;background:#f1f5f9;border-radius:10px;padding:6px 10px;cursor:pointer">✕</button>
+      </div>
   
+      <div style="display:grid;gap:12px">
+        <label style="display:grid;gap:6px">
+          <span style="font-size:14px;color:#475569">Срок действия</span>
+          <select id="cfgExpire" style="padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+            <option value="7">7 дней</option>
+            <option value="14">14 дней</option>
+            <option value="30">30 дней</option>
+            <option value="custom">Указать дату</option>
+          </select>
+        </label>
+  
+        <label id="cfgDateWrap" style="display:none;gap:6px">
+          <span style="font-size:14px;color:#475569;margin-right:8px">Дата и время (локальные)</span>
+          <input id="cfgDate" type="datetime-local" style="padding:10px;border:1px solid #e5e7eb;border-radius:10px" />
+        </label>
+  
+        <label style="display:grid;gap:6px">
+          <span style="font-size:14px;color:#475569">Идентификатор (slug, латиница/цифры/дефисы)</span>
+          <input id="cfgSlug" type="text" placeholder="например, ivanov-1016"
+                 style="padding:10px;border:1px solid #e5e7eb;border-radius:10px" />
+        </label>
+  
+        <label style="display:grid;gap:6px">
+          <span style="font-size:14px;color:#475569">Заметка клиенту (необязательно)</span>
+          <textarea id="cfgNote" rows="3" placeholder="Например: Под вашу дату есть спецусловия"
+                    style="padding:10px;border:1px solid #e5e7eb;border-radius:10px;resize:vertical"></textarea>
+        </label>
+      </div>
+  
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+        <button id="cfgCancel" type="button" class="btn">Отмена</button>
+        <button id="cfgCreate" type="button" class="btn">Создать ссылку</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import {
@@ -212,6 +256,29 @@
       const $gClose = document.getElementById('gallery-close');
       let galleryUrls = [];
       let galleryIndex = 0;
+
+      // link-config modal
+      const $cfg     = document.getElementById('linkConfig');
+      const $cfgClose= document.getElementById('cfgClose');
+      const $cfgCancel= document.getElementById('cfgCancel');
+      const $cfgCreate= document.getElementById('cfgCreate');
+      const $cfgExpire= document.getElementById('cfgExpire');
+      const $cfgDateWrap= document.getElementById('cfgDateWrap');
+      const $cfgDate = document.getElementById('cfgDate');
+      const $cfgSlug = document.getElementById('cfgSlug');
+      const $cfgNote = document.getElementById('cfgNote');
+      
+      function openCfg() { $cfg.style.display='flex'; }
+      function closeCfg(){ $cfg.style.display='none'; }
+      
+      $cfgClose?.addEventListener('click', closeCfg);
+      $cfgCancel?.addEventListener('click', closeCfg);
+      $cfg.addEventListener('click', (e)=>{ if(e.target===$cfg) closeCfg(); });
+      
+      $cfgExpire?.addEventListener('change', ()=>{
+        $cfgDateWrap.style.display = ($cfgExpire.value === 'custom') ? 'grid' : 'none';
+      });
+
       function renderGallery(){
         $gImg.src = galleryUrls[galleryIndex];
         $gStrip.innerHTML = '';
@@ -414,6 +481,7 @@
       }
   
       // Генерация ссылки
+      /*
       $genBtn?.addEventListener('click', async () => {
         if (!selected.size) return;
         const ids = Array.from(selected);
@@ -437,7 +505,71 @@
         if (copied) showToast('Скопировано'); else alert('Ссылка сгенерирована:\n' + url);
         if (navigator.share) { try { await navigator.share({ title:'Подбор площадок', url }); } catch {} }
       });
-  
+      */
+      $genBtn?.addEventListener('click', () => {
+        if (!selected.size) return;
+        // префилл
+        $cfgExpire.value = '7';
+        $cfgDateWrap.style.display = 'none';
+        $cfgSlug.value = '';     // можно автогенерить, оставим вручную
+        $cfgNote.value = 'Подбор от ' + new Date().toLocaleString();
+        openCfg();
+      });
+
+      $cfgCreate?.addEventListener('click', async () => {
+        if (!selected.size) return;
+      
+        // slug — валидируем
+        let slug = ($cfgSlug.value || '').trim().toLowerCase();
+        if (!slug) slug = Math.random().toString(36).slice(2,8);
+        if (!/^[a-z0-9-]{3,50}$/.test(slug)) {
+          alert('Slug должен содержать только латиницу, цифры и дефисы (3–50 символов).');
+          return;
+        }
+      
+        // срок
+        let expiresAt;
+        if ($cfgExpire.value === 'custom') {
+          if (!$cfgDate.value) { alert('Укажите дату/время истечения.'); return; }
+          expiresAt = new Date($cfgDate.value);
+        } else {
+          const days = parseInt($cfgExpire.value, 10) || 7;
+          expiresAt = new Date(Date.now() + days*24*60*60*1000);
+        }
+      
+        const ids   = Array.from(selected);
+        const token = Math.random().toString(36).slice(2,10);
+        const note  = $cfgNote.value?.trim() || null;
+      
+        try {
+          // создаём документ (если slug занят — просто перезапишем)
+          await setDoc(doc(db, COL.shortlists, slug), {
+            venue_ids: ids,
+            token_hash: await sha256Hex(token),
+            note,
+            created_at: serverTimestamp(),
+            expires_at: expiresAt
+          });
+      
+          closeCfg();
+      
+          // готовим ссылку + шаринг
+          const url = `${location.origin}/?shortlist=${slug}&token=${token}`;
+          lastGeneratedUrl = url;
+          ($shareBox || {}).style.display = 'inline-flex';
+          const enc = encodeURIComponent(url);
+          if ($waBtn) $waBtn.href = `https://wa.me/?text=${enc}`;
+          if ($tgBtn) $tgBtn.href = `https://t.me/share/url?url=${enc}`;
+      
+          const copied = await copyToClipboard(url);
+          if (copied) showToast('Скопировано'); else alert('Ссылка:\n' + url);
+          if (navigator.share) { try { await navigator.share({ title:'Подбор площадок', url }); } catch {} }
+        } catch (e) {
+          console.error(e);
+          alert('Не удалось создать ссылку: ' + (e?.message || e));
+        }
+      });
+
       // Старт — решаем, что грузить
       const qs = new URLSearchParams(location.search);
       const shortlistSlug  = qs.get('shortlist');
