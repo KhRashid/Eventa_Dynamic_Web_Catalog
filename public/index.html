@@ -80,7 +80,7 @@
       </label>
       <button id="genBtn" class="btn" disabled>Сгенерировать ссылку</button>
       <span id="shareBox" style="margin-left:8px; display:none; gap:8px; align-items:center;">
-        <button id="copyBtn" class="btn">Скопировать</button>
+        <button id="copyBtn" type="button" class="btn">Скопировать</button>
         <a id="waBtn" class="btn" target="_blank" rel="noreferrer">WhatsApp</a>
         <a id="tgBtn" class="btn" target="_blank" rel="noreferrer">Telegram</a>
       </span>
@@ -146,7 +146,9 @@
     const $waBtn    = document.getElementById('waBtn');
     const $tgBtn    = document.getElementById('tgBtn');
     const $toast    = document.getElementById('toast');
-    
+
+    let lastGeneratedUrl = "";
+
     function showToast(text='Скопировано') {
       $toast.textContent = text;
       $toast.style.opacity = '1';
@@ -180,6 +182,12 @@
       rerender();
     });
     
+    $copyBtn.addEventListener('click', async () => {
+      if (!lastGeneratedUrl) return;  // ссылки ещё нет
+      const ok = await copyToClipboard(lastGeneratedUrl);
+      showToast(ok ? 'Скопировано' : 'Скопируйте вручную');
+    });
+
     $genBtn.addEventListener('click', async () => {
       if (!selected.size) return;
       const ids = Array.from(selected);
@@ -199,6 +207,7 @@
       });
     
       const url = `${location.origin}/?shortlist=${slug}&token=${token}`;
+      lastGeneratedUrl = url;                         // <— сохраняем
 
       // показать блок шаринга
       $shareBox.style.display = 'inline-flex';
@@ -219,8 +228,11 @@
         catch (_) {} // пользователь мог отменить — ок
       }
       
+      // сразу попытаться скопировать и показать тост/алерт
+      const copied = await copyToClipboard(url);
+      if (copied) showToast('Скопировано'); else alert('Ссылка сгенерирована:\n' + url);
+      
       // финальный alert оставляем как fallback
-
       await navigator.clipboard.writeText(url).catch(()=>{});
       alert('Ссылка сгенерирована и скопирована:\n' + url);
     });
