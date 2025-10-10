@@ -508,6 +508,21 @@
         const fallbackUrls = mediaArr.map(m => m?.url).filter(Boolean);
         const allMediaUrls = Array.from(new Set([...allPhotoUrls, ...fallbackUrls]));
 
+        // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
+        const pMin = Number(v.price_min), pMax = Number(v.price_max);
+        const hasPrice = !Number.isNaN(pMin) && !Number.isNaN(pMax);
+        
+        const cMin = Number(v.capacity_min), cMax = Number(v.capacity_max);
+        const hasCap = !Number.isNaN(cMin) && !Number.isNaN(cMax);
+        
+        // URL для карты: приоритет — явный location_url, иначе строим по координатам
+        const mapHref =
+          v.location_url
+          || ((v.location_lat!=null && v.location_lng!=null)
+              ? `https://maps.google.com/?q=${v.location_lat},${v.location_lng}`
+              : '');
+        
+        // ----- шаблон карточки (без описания и без контактов) -----
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
@@ -518,15 +533,11 @@
                 <div style="font-weight:600;font-size:18px">${v.name||''}</div>
                 <div class="loc">${[v.city, v.district].filter(Boolean).join(', ')}</div>
               </div>
-              <div style="text-align:right;font-size:14px;color:#475569">
-                ${
-                  (Number.isFinite(v.price_min) && Number.isFinite(v.price_max))
-                    ? `от ${fmt(v.price_min)} – до ${fmt(v.price_max)} ${v.currency||'AZN'}` : ''
-                }<br>
-                ${
-                  (Number.isFinite(v.capacity_min) && Number.isFinite(v.capacity_max))
-                    ? `${fmt(v.capacity_min)}–${fmt(v.capacity_max)}` : ''
+              <div style="text-align:right;font-size:14px;color:#475569; white-space:nowrap;">
+                ${hasPrice ? `от ${fmt(pMin)} – до ${fmt(pMax)} ${v.currency||'AZN'}` : ''}${
+                  hasPrice && hasCap ? '<br>' : (hasCap ? '<br>' : '')
                 }
+                ${hasCap ? `${fmt(cMin)}–${fmt(cMax)}` : ''}
               </div>
             </div>
         
@@ -534,10 +545,11 @@
         
             <div class="btns">
               ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
-              ${v.location_url ? `<a class="btn" href="${v.location_url}" target="_blank" rel="noreferrer">Карта</a>` : ''}
+              ${mapHref ? `<a class="btn" href="${mapHref}" target="_blank" rel="noreferrer">Карта</a>` : ''}
             </div>
           </div>
         `;
+
 
         // выбор
         if (pickMode) {
