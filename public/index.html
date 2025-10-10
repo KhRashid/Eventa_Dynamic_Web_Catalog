@@ -640,7 +640,7 @@
         
             <div class="btns">
               ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
-              ${mapHref ? `<a class="btn" style="text-decoration:none" href="${mapHref}" target="_blank" rel="noreferrer">Карта</a>` : ''}
+              ${mapHref ? `<button class="btn" data-action="map" data-href="${mapHref}">Карта</button>` : ''}
             </div>
           </div>
         `;
@@ -671,6 +671,13 @@
         const mediaBtn = card.querySelector('[data-action="media"]');
         mediaBtn?.addEventListener('click', () => openGallery(allMediaUrls, 0));
 
+        // кнопка Карта
+        const mapBtn = card.querySelector('[data-action="map"]');
+        mapBtn?.addEventListener('click', () => {
+          const href = mapBtn.dataset.href;
+          if (href) window.open(href, '_blank', 'noopener,noreferrer');
+        });
+        
         // клик по обложке
         const coverEl = card.querySelector('.img');
         coverEl?.addEventListener('click', () => {
