@@ -489,19 +489,40 @@
               <div style="text-align:right;font-size:14px;color:#475569">
                 ${
                   (Number.isFinite(v.price_min) && Number.isFinite(v.price_max))
-                  ? `от ${fmt(v.price_min)} – до ${fmt(v.price_max)} ${v.currency||''}` : ''
+                    ? `от ${fmt(v.price_min)} – до ${fmt(v.price_max)} ${v.currency||'AZN'}` : ''
                 }<br>
                 ${
                   (Number.isFinite(v.capacity_min) && Number.isFinite(v.capacity_max))
-                  ? `${fmt(v.capacity_min)}–${fmt(v.capacity_max)}` : ''
+                    ? `${fmt(v.capacity_min)}–${fmt(v.capacity_max)}` : ''
                 }
               </div>
             </div>
-            ${v.description ? `<p class="p">${v.description}</p>` : ''}
+        
+            <!-- ОПИСАНИЕ УДАЛЕНО -->
+        
             <div class="btns">
               ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
               ${v.location_url ? `<a class="btn" href="${v.location_url}" target="_blank" rel="noreferrer">Карта</a>` : ''}
             </div>
+          </div>
+        `;
+        
+            ${
+              (v.contact_name || v.contact_phone || v.contact)
+              ? `<div class="contact">
+                   Контакт: ${
+                     v.contact
+                       ? v.contact
+                       : [
+                           v.contact_name,
+                           v.contact_phone
+                             ? `<a href="tel:${String(v.contact_phone).replace(/[^+\d]/g,'')}">${v.contact_phone}</a>`
+                             : ''
+                         ].filter(Boolean).join(' · ')
+                   }
+                 </div>`
+              : ''
+            }
           </div>
         `;
 
