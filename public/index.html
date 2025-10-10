@@ -508,12 +508,40 @@
         const fallbackUrls = mediaArr.map(m => m?.url).filter(Boolean);
         const allMediaUrls = Array.from(new Set([...allPhotoUrls, ...fallbackUrls]));
 
-        // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
-        const pMin = Number(v.price_min), pMax = Number(v.price_max);
-        const hasPrice = !Number.isNaN(pMin) && !Number.isNaN(pMax);
+        // SVG иконки (16x16)
+        const svgPin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M12 22s7-5.33 7-12a7 7 0 10-14 0c0 6.67 7 12 7 12z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+          <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        </svg>`;
+        const svgMoney = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M3 7h18v10H3z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+          <path d="M7 12h10M12 9v6" stroke="currentColor" stroke-width="1.7" />
+        </svg>`;
+        const svgUsers = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M2 19a7 7 0 0114 0" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M17 11a2 2 0 100-4" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M20.5 19a5.5 5.5 0 00-5.5-4" stroke="currentColor" stroke-width="1.7"/>
+        </svg>`;
         
-        const cMin = Number(v.capacity_min), cMax = Number(v.capacity_max);
-        const hasCap = !Number.isNaN(cMin) && !Number.isNaN(cMax);
+        // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
+        const pMinNum = Number(v.price_min), pMaxNum = Number(v.price_max);
+        const hasPMin = !Number.isNaN(pMinNum), hasPMax = !Number.isNaN(pMaxNum);
+        const hasPriceAny = hasPMin || hasPMax;
+        const priceText = hasPriceAny
+          ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${v.currency||'AZN'}`
+             : hasPMin ? `от ${fmt(pMinNum)} ${v.currency||'AZN'}`
+             : `до ${fmt(pMaxNum)} ${v.currency||'AZN'}`)
+          : '';
+        
+        const cMinNum = Number(v.capacity_min), cMaxNum = Number(v.capacity_max);
+        const hasCMin = !Number.isNaN(cMinNum), hasCMax = !Number.isNaN(cMaxNum);
+        const hasCapAny = hasCMin || hasCMax;
+        const capText = hasCapAny
+          ? (hasCMin && hasCMax ? `${fmt(cMinNum)}–${fmt(cMaxNum)}`
+             : hasCMin ? `от ${fmt(cMinNum)}`
+             : `до ${fmt(cMaxNum)}`)
+          : '';
         
         // URL для карты: приоритет — явный location_url, иначе строим по координатам
         const mapHref =
@@ -531,17 +559,22 @@
             <div class="row">
               <div>
                 <div style="font-weight:600;font-size:18px">${v.name||''}</div>
-                <div class="loc">${[v.city, v.district].filter(Boolean).join(', ')}</div>
+                <div class="loc" style="display:flex;align-items:center;gap:6px;color:#64748b;">
+                  <span class="ico" style="display:inline-flex;line-height:0;">${svgPin}</span>
+                  <span>${[v.city, v.district].filter(Boolean).join(', ')}</span>
+                </div>
               </div>
-              <div style="text-align:right;font-size:14px;color:#475569; white-space:nowrap;">
-                ${hasPrice ? `от ${fmt(pMin)} – до ${fmt(pMax)} ${v.currency||'AZN'}` : ''}${
-                  hasPrice && hasCap ? '<br>' : (hasCap ? '<br>' : '')
-                }
-                ${hasCap ? `${fmt(cMin)}–${fmt(cMax)} гостей` : ''}
+              <div style="text-align:right;font-size:14px;color:#475569">
+                ${hasPriceAny ? `<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;">
+                    <span class="ico" style="display:inline-flex;line-height:0;">${svgMoney}</span>
+                    <span>${priceText}</span>
+                  </div>` : ''}
+                ${hasCapAny ? `<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:2px;">
+                    <span class="ico" style="display:inline-flex;line-height:0;">${svgUsers}</span>
+                    <span>${capText}</span>
+                  </div>` : ''}
               </div>
             </div>
-        
-            <!-- ОПИСАНИЕ УДАЛЕНО -->
         
             <div class="btns">
               ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
@@ -549,8 +582,7 @@
             </div>
           </div>
         `;
-
-
+        
         // выбор
         if (pickMode) {
           const dot = document.createElement('div');
