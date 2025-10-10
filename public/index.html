@@ -431,40 +431,53 @@
     }
     function applyFilters(){
       if(!$fSearch) return;
+    
       const q = ($fSearch.value||'').trim().toLowerCase();
       const dist = getDistrictValue();
       const [capLo,capHi]     = parseRange(($fCap.value||'').trim());
       const [priceLo,priceHi] = parseRange(($fPrice.value||'').trim());
-
-      _viewVenues = _allVenues.filter(v=>{
-        if(q){
+    
+      // если фильтров нет — показываем весь список
+      const noFilters = !q && !dist && capLo==null && capHi==null && priceLo==null && priceHi==null;
+    
+      _viewVenues = noFilters ? _allVenues.slice() : _allVenues.filter(v=>{
+        // текстовый поиск
+        if (q){
           const hay = [v.name,v.city,v.district,(v.tags||[]).join(' '),v.description]
                       .filter(Boolean).join(' ').toLowerCase();
           if(!hay.includes(q)) return false;
         }
-        if(dist && v.district!==dist) return false;
-
-        if(capLo!=null || capHi!=null){
-          const vLo = +v.capacity_min||0, vHi = +v.capacity_max||0;
-          if(capLo!=null && vHi<capLo) return false;
-          if(capHi!=null && vLo>capHi) return false;
+    
+        // район
+        if (dist && v.district !== dist) return false;
+    
+        // вместимость: нет данных — считаем бесконечными границами
+        if (capLo!=null || capHi!=null){
+          const vLo = Number.isFinite(v.capacity_min) ? +v.capacity_min : -Infinity;
+          const vHi = Number.isFinite(v.capacity_max) ? +v.capacity_max :  Infinity;
+          if (capLo!=null && vHi < capLo) return false;
+          if (capHi!=null && vLo > capHi) return false;
         }
-        if(priceLo!=null || priceHi!=null){
-          const pLo = +v.price_min||0, pHi = +v.price_max||0;
-          if(priceLo!=null && pHi<priceLo) return false;
-          if(priceHi!=null && pLo>priceHi) return false;
+    
+        // цена/гость: нет данных — бесконечные границы
+        if (priceLo!=null || priceHi!=null){
+          const pLo = Number.isFinite(v.price_min) ? +v.price_min : -Infinity;
+          const pHi = Number.isFinite(v.price_max) ? +v.price_max :  Infinity;
+          if (priceLo!=null && pHi < priceLo) return false;
+          if (priceHi!=null && pLo > priceHi) return false;
         }
+    
         return true;
       });
-
+    
       render(_viewVenues, window.__lastMeta);
-
+    
       // синхронизация в URL
       const params = new URLSearchParams(location.search);
       q ? params.set('q', q) : params.delete('q');
       dist ? params.set('d', dist) : params.delete('d');
-      $fCap.value   ? params.set('cap', $fCap.value.trim())     : params.delete('cap');
-      $fPrice.value ? params.set('price', $fPrice.value.trim()) : params.delete('price');
+      $fCap.value   ? params.set('cap', ($fCap.value||'').trim())     : params.delete('cap');
+      $fPrice.value ? params.set('price', ($fPrice.value||'').trim()) : params.delete('price');
       const newUrl = `${location.pathname}?${params.toString()}`;
       history.replaceState(null,'',newUrl);
     }
@@ -525,25 +538,6 @@
             </div>
           </div>
         `;
-        
-            ${
-              (v.contact_name || v.contact_phone || v.contact)
-              ? `<div class="contact">
-                   Контакт: ${
-                     v.contact
-                       ? v.contact
-                       : [
-                           v.contact_name,
-                           v.contact_phone
-                             ? `<a href="tel:${String(v.contact_phone).replace(/[^+\d]/g,'')}">${v.contact_phone}</a>`
-                             : ''
-                         ].filter(Boolean).join(' · ')
-                   }
-                 </div>`
-              : ''
-            }
-          </div>
-        `;
 
         // выбор
         if (pickMode) {
@@ -595,13 +589,12 @@
       _allVenues = venues.slice();
       populateDistricts(_allVenues);
       restoreFiltersFromURL();
-      ensureDistrictValid();          // <--- добавили
-
-      const ps = new URLSearchParams(location.search);
+      ensureDistrictValid();  // привести селект к валидному значению
       
-      // если параметров нет в URL, очищаем значения фильтров (чтобы не было дефолтных "100-300" / "20-100")
+      // если параметров нет в URL — очищаем дефолтные значения
+      const ps = new URLSearchParams(location.search);
       if (!ps.has('q'))     $fSearch.value   = '';
-      if (!ps.has('d'))     $fDistrict.value = '';
+      if (!ps.has('d'))     { $fDistrict.value=''; $fDistrict.selectedIndex = 0; }
       if (!ps.has('cap'))   $fCap.value      = '';
       if (!ps.has('price')) $fPrice.value    = '';
       
@@ -633,18 +626,15 @@
       _allVenues = venues.slice();                 // источник = подмножество шортлиста
       populateDistricts(_allVenues);               // районы только из шортлиста
       restoreFiltersFromURL();
-      //ensureDistrictValid();          // <--- добавили
-
+      ensureDistrictValid();  // привести селект к валидному значению
+      
+      // если параметров нет в URL — очищаем дефолтные значения
       const ps = new URLSearchParams(location.search);
-
-      // если параметров нет в URL, очищаем значения фильтров (чтобы не было дефолтных "100-300" / "20-100")
       if (!ps.has('q'))     $fSearch.value   = '';
-      if (!ps.has('d'))     $fDistrict.value = '';
+      if (!ps.has('d'))     { $fDistrict.value=''; $fDistrict.selectedIndex = 0; }
       if (!ps.has('cap'))   $fCap.value      = '';
       if (!ps.has('price')) $fPrice.value    = '';
-
-      window.__lastMeta = { note: sData.note, expires_at: exp?.toISOString() };
-
+      
       bindFilterEventsOnce();
       applyFilters();                               // только через фильтры
     }
