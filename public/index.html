@@ -245,6 +245,15 @@
     return [];
   }
 
+  function getDistrictValue(){
+    if (!$fDistrict) return '';
+    const v = ($fDistrict.value || '').trim();
+    const low = v.toLowerCase();
+    // любые варианты «все районы» считаем пустым значением
+    if (v === '' || low === 'все районы' || low === 'all' ) return '';
+    return v;
+  }
+
   // ждём DOM — тут мы берём все элементы и вешаем обработчики
   window.addEventListener('DOMContentLoaded', async () => {
     // Firebase
@@ -396,6 +405,16 @@
         '<option value="">Все районы</option>' +
         districts.map(d=>`<option value="${d}">${d}</option>`).join('');
     }
+    function ensureDistrictValid(){
+      if (!$fDistrict) return;
+      const val = ($fDistrict.value||'').trim();
+      const opts = Array.from($fDistrict.options).map(o=>o.value);
+      // если текущего value нет среди опций или это «Все районы» — сбрасываем
+      if (!opts.includes(val) || val.toLowerCase()==='все районы' || val.toLowerCase()==='all') {
+        $fDistrict.value = '';       // выберется первая опция <option value="">
+        $fDistrict.selectedIndex = 0;
+      }
+    }    
     function restoreFiltersFromURL(){
       if(!$fSearch) return;
       const ps = new URLSearchParams(location.search);
@@ -413,7 +432,7 @@
     function applyFilters(){
       if(!$fSearch) return;
       const q = ($fSearch.value||'').trim().toLowerCase();
-      const dist = $fDistrict.value||'';
+      const dist = getDistrictValue();
       const [capLo,capHi]     = parseRange(($fCap.value||'').trim());
       const [priceLo,priceHi] = parseRange(($fPrice.value||'').trim());
 
@@ -576,6 +595,7 @@
       _allVenues = venues.slice();
       populateDistricts(_allVenues);
       restoreFiltersFromURL();
+      ensureDistrictValid();          // <--- добавили
 
       const ps = new URLSearchParams(location.search);
       
@@ -613,6 +633,7 @@
       _allVenues = venues.slice();                 // источник = подмножество шортлиста
       populateDistricts(_allVenues);               // районы только из шортлиста
       restoreFiltersFromURL();
+      //ensureDistrictValid();          // <--- добавили
 
       const ps = new URLSearchParams(location.search);
 
