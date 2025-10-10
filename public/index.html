@@ -576,6 +576,15 @@
       _allVenues = venues.slice();
       populateDistricts(_allVenues);
       restoreFiltersFromURL();
+
+      const ps = new URLSearchParams(location.search);
+      
+      // если параметров нет в URL, очищаем значения фильтров (чтобы не было дефолтных "100-300" / "20-100")
+      if (!ps.has('q'))     $fSearch.value   = '';
+      if (!ps.has('d'))     $fDistrict.value = '';
+      if (!ps.has('cap'))   $fCap.value      = '';
+      if (!ps.has('price')) $fPrice.value    = '';
+      
       bindFilterEventsOnce();
       applyFilters();                         // только через фильтры
     }
@@ -604,6 +613,15 @@
       _allVenues = venues.slice();                 // источник = подмножество шортлиста
       populateDistricts(_allVenues);               // районы только из шортлиста
       restoreFiltersFromURL();
+
+      const ps = new URLSearchParams(location.search);
+
+      // если параметров нет в URL, очищаем значения фильтров (чтобы не было дефолтных "100-300" / "20-100")
+      if (!ps.has('q'))     $fSearch.value   = '';
+      if (!ps.has('d'))     $fDistrict.value = '';
+      if (!ps.has('cap'))   $fCap.value      = '';
+      if (!ps.has('price')) $fPrice.value    = '';
+
       window.__lastMeta = { note: sData.note, expires_at: exp?.toISOString() };
 
       bindFilterEventsOnce();
