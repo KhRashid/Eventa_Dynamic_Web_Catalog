@@ -43,6 +43,8 @@
     .note{font-size:12px;color:var(--muted)}
     .inp{padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
     @media (max-width:900px){ #filters{grid-template-columns:1fr 1fr; } }
+    .btn { text-decoration: none; }
+    .btn:visited { text-decoration: none; }
   </style>
 
   <!-- СТИЛИ МОДАЛКИ ГАЛЕРЕИ -->
@@ -199,6 +201,16 @@
 
   // утилиты
   const fmt = (n) => new Intl.NumberFormat('ru-RU').format(n);
+  // аккуратно достаём число из чего угодно:  "45", "45.5", "45,5", "от 45 AZN"
+  const toNum = (x) => {
+    if (x == null) return NaN;
+    if (typeof x === 'number') return x;
+    if (typeof x === 'string') {
+      const m = x.replace(',', '.').match(/-?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : NaN;
+    }
+    return NaN;
+  };
   const sha256Hex = async (text) => {
     const enc = new TextEncoder().encode(text);
     const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -525,6 +537,7 @@
         </svg>`;
         
         // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
+        /*
         const pMinNum = Number(v.price_min), pMaxNum = Number(v.price_max);
         const hasPMin = !Number.isNaN(pMinNum), hasPMax = !Number.isNaN(pMaxNum);
         const hasPriceAny = hasPMin || hasPMax;
@@ -532,6 +545,16 @@
           ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${v.currency||'AZN'}`
              : hasPMin ? `от ${fmt(pMinNum)} ${v.currency||'AZN'}`
              : `до ${fmt(pMaxNum)} ${v.currency||'AZN'}`)
+          : '';
+        */
+        const pMinNum = toNum(v.price_min), pMaxNum = toNum(v.price_max);
+        const hasPMin = !Number.isNaN(pMinNum), hasPMax = !Number.isNaN(pMaxNum);
+        const hasPriceAny = hasPMin || hasPMax;
+        const currency = v.currency || 'AZN';
+        const priceText = hasPriceAny
+          ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
+             : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
+             : `до ${fmt(pMaxNum)} ${currency}`)
           : '';
         
         const cMinNum = Number(v.capacity_min), cMaxNum = Number(v.capacity_max);
@@ -578,7 +601,7 @@
         
             <div class="btns">
               ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
-              ${mapHref ? `<a class="btn" href="${mapHref}" target="_blank" rel="noreferrer">Карта</a>` : ''}
+              ${mapHref ? `<a class="btn" style="text-decoration:none" href="${mapHref}" target="_blank" rel="noreferrer">Карта</a>` : ''}
             </div>
           </div>
         `;
