@@ -202,7 +202,8 @@
 
   // утилиты
   const fmt = (n) => new Intl.NumberFormat('ru-RU').format(n);
-  // аккуратно достаём число из чего угодно:  "45", "45.5", "45,5", "от 45 AZN"
+  
+  // Парсим число
   const toNum = (x) => {
     if (x == null) return NaN;
     if (typeof x === 'number') return x;
@@ -212,10 +213,10 @@
     }
     return NaN;
   };
-  // НОВОЕ: диапазон цен из меню (menu -> categories -> items[].price_azn)
+  
+  // Диапазон цен из меню (price_azn)
   function getPriceRangeFromMenu(menu) {
     if (!menu || !Array.isArray(menu)) return { min: NaN, max: NaN };
-  
     const prices = [];
     for (const cat of menu) {
       const items = Array.isArray(cat?.items) ? cat.items : [];
@@ -227,6 +228,54 @@
     if (!prices.length) return { min: NaN, max: NaN };
     return { min: Math.min(...prices), max: Math.max(...prices) };
   }
+  
+  // Единая точка получения диапазона цены площадки
+  function getVenuePriceMinMax(v) {
+    // сначала пробуем «прямые» поля (если когда-нибудь появятся)
+    let pMin = toNum(v.price_min ?? v.priceMin ?? v.min_price ?? v.pricing_min ?? v.price?.min);
+    let pMax = toNum(v.price_max ?? v.priceMax ?? v.max_price ?? v.pricing_max ?? v.price?.max);
+    // если пусто — считаем из меню
+    if (Number.isNaN(pMin) && Number.isNaN(pMax)) {
+      const viaMenu = getPriceRangeFromMenu(v.menu);
+      pMin = viaMenu.min; pMax = viaMenu.max;
+    }
+    return { min: pMin, max: pMax };
+  }
+  
+  // Диапазон вместимости площадки
+  function getVenueCapacityMinMax(v) {
+    const cMin = toNum(v.capacity_min ?? v.capacityMin ?? v.min_capacity ?? v.capacity?.min);
+    const cMax = toNum(v.capacity_max ?? v.capacityMax ?? v.max_capacity ?? v.capacity?.max);
+    return { min: cMin, max: cMax };
+  }
+  
+  // Совпадение диапазона вместимости по фильтру
+  // Одинокое число = "нужно уместить N гостей": требуется cMin <= N <= cMax
+  function capacityMatches(cMin, cMax, capLo, capHi) {
+    if (Number.isNaN(cMin) || Number.isNaN(cMax)) return false;
+    if (capLo == null && capHi == null) return true;
+    if (capHi == null && capLo != null) {          // одиночное число
+      return cMin <= capLo && cMax >= capLo;
+    }
+    // диапазон → пересечение
+    if (capLo != null && cMax < capLo) return false;
+    if (capHi != null && cMin > capHi) return false;
+    return true;
+  }
+  
+  // Совпадение диапазона цены по фильтру (аналогично вместимости)
+  function priceMatches(pMin, pMax, priceLo, priceHi) {
+    if (Number.isNaN(pMin) || Number.isNaN(pMax)) return false;
+    if (priceLo == null && priceHi == null) return true;
+    if (priceHi == null && priceLo != null) {      // одиночное число
+      return pMin <= priceLo && pMax >= priceLo;
+    }
+    // диапазон → пересечение
+    if (priceLo != null && pMax < priceLo) return false;
+    if (priceHi != null && pMin > priceHi) return false;
+    return true;
+  }
+  
   const sha256Hex = async (text) => {
     const enc = new TextEncoder().encode(text);
     const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -461,39 +510,28 @@
       if(!$fSearch) return;
     
       const q = ($fSearch.value||'').trim().toLowerCase();
-      const dist = getDistrictValue();
-      const [capLo,capHi]     = parseRange(($fCap.value||'').trim());
-      const [priceLo,priceHi] = parseRange(($fPrice.value||'').trim());
+      const dist = ($fDistrict?.value || '').trim();
+      const [capLo, capHi]     = parseRange(($fCap?.value||'').trim());
+      const [priceLo, priceHi] = parseRange(($fPrice?.value||'').trim());
     
-      // если фильтров нет — показываем весь список
-      const noFilters = !q && !dist && capLo==null && capHi==null && priceLo==null && priceHi==null;
-    
-      _viewVenues = noFilters ? _allVenues.slice() : _allVenues.filter(v=>{
-        // текстовый поиск
-        if (q){
+      _viewVenues = _allVenues.filter(v=>{
+        // поиск
+        if(q){
           const hay = [v.name,v.city,v.district,(v.tags||[]).join(' '),v.description]
                       .filter(Boolean).join(' ').toLowerCase();
           if(!hay.includes(q)) return false;
         }
     
         // район
-        if (dist && v.district !== dist) return false;
+        if(dist && v.district !== dist) return false;
     
-        // вместимость: нет данных — считаем бесконечными границами
-        if (capLo!=null || capHi!=null){
-          const vLo = Number.isFinite(v.capacity_min) ? +v.capacity_min : -Infinity;
-          const vHi = Number.isFinite(v.capacity_max) ? +v.capacity_max :  Infinity;
-          if (capLo!=null && vHi < capLo) return false;
-          if (capHi!=null && vLo > capHi) return false;
-        }
+        // вместимость
+        const {min: cMin, max: cMax} = getVenueCapacityMinMax(v);
+        if(!capacityMatches(cMin, cMax, capLo, capHi)) return false;
     
-        // цена/гость: нет данных — бесконечные границы
-        if (priceLo!=null || priceHi!=null){
-          const pLo = Number.isFinite(v.price_min) ? +v.price_min : -Infinity;
-          const pHi = Number.isFinite(v.price_max) ? +v.price_max :  Infinity;
-          if (priceLo!=null && pHi < priceLo) return false;
-          if (priceHi!=null && pLo > priceHi) return false;
-        }
+        // цена/гость
+        const {min: pMin, max: pMax} = getVenuePriceMinMax(v);
+        if(!priceMatches(pMin, pMax, priceLo, priceHi)) return false;
     
         return true;
       });
@@ -509,6 +547,7 @@
       const newUrl = `${location.pathname}?${params.toString()}`;
       history.replaceState(null,'',newUrl);
     }
+
 
     // ---- РЕНДЕР карточек
     function render(venues, meta){
@@ -553,12 +592,6 @@
         </svg>`;
         
         // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
-        /*
-        const pMinNum = toNum(v.price_min), pMaxNum = toNum(v.price_max);
-        const hasPMin = !Number.isNaN(pMinNum), hasPMax = !Number.isNaN(pMaxNum);
-        const hasPriceAny = hasPMin || hasPMax;
-        */
-
         // 1) сначала ищем «прямые» поля (если когда-нибудь появятся)
         const rawPriceMin =
           v.price_min ?? v.priceMin ?? v.min_price ?? v.pricing_min ??
@@ -583,13 +616,6 @@
         const hasPriceAny = hasPMin || hasPMax;
         
         const currency = v.currency || 'AZN';
-        /*
-        const priceText = hasPriceAny
-          ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
-             : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
-             : `до ${fmt(pMaxNum)} ${currency}`)
-          : '';
-          */
         const priceText = hasPriceAny
         ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
            : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
