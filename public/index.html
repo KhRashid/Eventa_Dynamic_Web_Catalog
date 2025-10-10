@@ -211,6 +211,21 @@
     }
     return NaN;
   };
+  // НОВОЕ: диапазон цен из меню (menu -> categories -> items[].price_azn)
+  function getPriceRangeFromMenu(menu) {
+    if (!menu || !Array.isArray(menu)) return { min: NaN, max: NaN };
+  
+    const prices = [];
+    for (const cat of menu) {
+      const items = Array.isArray(cat?.items) ? cat.items : [];
+      for (const it of items) {
+        const p = toNum(it?.price_azn ?? it?.priceAZN ?? it?.price);
+        if (!Number.isNaN(p)) prices.push(p);
+      }
+    }
+    if (!prices.length) return { min: NaN, max: NaN };
+    return { min: Math.min(...prices), max: Math.max(...prices) };
+  }
   const sha256Hex = async (text) => {
     const enc = new TextEncoder().encode(text);
     const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -538,24 +553,47 @@
         
         // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
         /*
-        const pMinNum = Number(v.price_min), pMaxNum = Number(v.price_max);
-        const hasPMin = !Number.isNaN(pMinNum), hasPMax = !Number.isNaN(pMaxNum);
-        const hasPriceAny = hasPMin || hasPMax;
-        const priceText = hasPriceAny
-          ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${v.currency||'AZN'}`
-             : hasPMin ? `от ${fmt(pMinNum)} ${v.currency||'AZN'}`
-             : `до ${fmt(pMaxNum)} ${v.currency||'AZN'}`)
-          : '';
-        */
         const pMinNum = toNum(v.price_min), pMaxNum = toNum(v.price_max);
         const hasPMin = !Number.isNaN(pMinNum), hasPMax = !Number.isNaN(pMaxNum);
         const hasPriceAny = hasPMin || hasPMax;
+        */
+
+        // 1) сначала ищем «прямые» поля (если когда-нибудь появятся)
+        const rawPriceMin =
+          v.price_min ?? v.priceMin ?? v.min_price ?? v.pricing_min ??
+          (v.price && v.price.min);
+        const rawPriceMax =
+          v.price_max ?? v.priceMax ?? v.max_price ?? v.pricing_max ??
+          (v.price && v.price.max);
+        
+        // 2) пробуем их распарсить
+        let pMinNum = toNum(rawPriceMin);
+        let pMaxNum = toNum(rawPriceMax);
+        
+        // 3) если их нет – берём из меню (price_azn)
+        if (Number.isNaN(pMinNum) && Number.isNaN(pMaxNum)) {
+          const fromMenu = getPriceRangeFromMenu(v.menu);
+          pMinNum = fromMenu.min;
+          pMaxNum = fromMenu.max;
+        }
+        
+        const hasPMin = !Number.isNaN(pMinNum);
+        const hasPMax = !Number.isNaN(pMaxNum);
+        const hasPriceAny = hasPMin || hasPMax;
+        
         const currency = v.currency || 'AZN';
+        /*
         const priceText = hasPriceAny
           ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
              : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
              : `до ${fmt(pMaxNum)} ${currency}`)
           : '';
+          */
+        const priceText = hasPriceAny
+        ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
+           : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
+           : `до ${fmt(pMaxNum)} ${currency}`)
+        : '';
         
         const cMinNum = Number(v.capacity_min), cMaxNum = Number(v.capacity_max);
         const hasCMin = !Number.isNaN(cMinNum), hasCMax = !Number.isNaN(cMaxNum);
