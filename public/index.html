@@ -1643,7 +1643,7 @@
       if (!config) return;
       
       $status.textContent = 'Загрузка данных из Firebase…';
-      const collectionName = COL[config.collection];
+      const collectionName = config.collection;
       console.log(`Loading catalog: ${catalog}, collection: ${collectionName}`);
       
       const snap = await getDocs(collection(db, collectionName));
@@ -1716,7 +1716,7 @@
       if (!config) return;
       
       $status.textContent = 'Загрузка персонального шортлиста…';
-      const sDoc = await getDoc(doc(db, COL[config.shortlistCollection], slug));
+      const sDoc = await getDoc(doc(db, config.shortlistCollection, slug));
       if (!sDoc.exists()) { $status.textContent = 'Шортлист не найден'; return; }
       const sData = sDoc.data();
       
@@ -1732,10 +1732,12 @@
       if (exp && exp < new Date()) { $status.textContent = 'Ссылка истекла'; return; }
 
       // Load items by IDs
-      const ids = catalog === 'singers' ? (sData.singer_ids || []) : (sData.venue_ids || []);
+      const ids = catalog === 'singers' ? (sData.singer_ids || []) 
+                : catalog === 'cars' ? (sData.car_ids || []) 
+                : (sData.venue_ids || []);
       const items = [];
       for (const id of ids) {
-        const itemDoc = await getDoc(doc(db, COL[config.collection], id));
+        const itemDoc = await getDoc(doc(db, config.collection, id));
         if (itemDoc.exists()) {
           const data = itemDoc.data();
           // Для певцов проверяем status
@@ -1806,7 +1808,7 @@
           expires_at: expiresAt
         };
         
-        await setDoc(doc(db, COL[config.shortlistCollection], slug), docData);
+        await setDoc(doc(db, config.shortlistCollection, slug), docData);
         closeCfg();
 
         const params = new URLSearchParams();
