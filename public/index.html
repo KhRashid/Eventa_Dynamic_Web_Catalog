@@ -360,8 +360,12 @@
   
   // Совпадение диапазона цены по фильтру (аналогично вместимости)
   function priceMatches(pMin, pMax, priceLo, priceHi) {
-    if (Number.isNaN(pMin) || Number.isNaN(pMax)) return false;
+    // Если фильтр не установлен - пропускаем всех (даже с NaN)
     if (priceLo == null && priceHi == null) return true;
+    
+    // Если у объекта нет цены (NaN) - не показываем только если фильтр установлен
+    if (Number.isNaN(pMin) || Number.isNaN(pMax)) return false;
+    
     if (priceHi == null && priceLo != null) {      // одиночное число
       return pMin <= priceLo && pMax >= priceLo;
     }
@@ -379,10 +383,12 @@
 
   // === SINGER-SPECIFIC HELPERS ===
   function getSingerPrice(singer) {
-    if (!Array.isArray(singer.pricing_packages) || !singer.pricing_packages.length) {
+    // pricing_packages теперь загружается отдельно и добавляется в singer._pricing_packages
+    const packages = singer._pricing_packages || [];
+    if (!packages.length) {
       return { min: NaN, max: NaN };
     }
-    const active = singer.pricing_packages.filter(p => p.is_active !== false);
+    const active = packages.filter(p => p.is_active !== false);
     const prices = active.map(p => toNum(p.price)).filter(p => !Number.isNaN(p));
     if (!prices.length) return { min: NaN, max: NaN };
     return { min: Math.min(...prices), max: Math.max(...prices) };
@@ -446,10 +452,33 @@
   let currentRepertoire = [];
   let currentSinger = null;
 
-  function openRepertoireModal(singer) {
-    if (!singer || !Array.isArray(singer.repertoire)) return;
+  async function openRepertoireModal(singer) {
+    if (!singer) return;
     currentSinger = singer;
-    currentRepertoire = singer.repertoire.slice();
+    
+    // Загружаем репертуар из связанных коллекций
+    currentRepertoire = [];
+    const repertoireIds = singer.assignedRepertoireIds || [];
+    
+    try {
+      for (const repId of repertoireIds) {
+        const repDoc = await getDoc(doc(db, 'repertoires', repId));
+        if (repDoc.exists()) {
+          const repData = repDoc.data();
+          const songIds = repData.songIds || [];
+          
+          // Загружаем песни
+          for (const songId of songIds) {
+            const songDoc = await getDoc(doc(db, 'songs', songId));
+            if (songDoc.exists()) {
+              currentRepertoire.push({ id: songDoc.id, ...songDoc.data() });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error loading repertoire:', err);
+    }
     
     const $modal = document.getElementById('repertoireModal');
     const $body = document.getElementById('repertoireBody');
@@ -525,11 +554,12 @@
   }
 
   function openPackagesModal(singer) {
-    if (!singer || !Array.isArray(singer.pricing_packages)) return;
+    if (!singer) return;
     const $modal = document.getElementById('packagesModal');
     const $body = document.getElementById('packagesBody');
     
-    const active = singer.pricing_packages.filter(p => p.is_active !== false);
+    const packages = singer._pricing_packages || [];
+    const active = packages.filter(p => p.is_active !== false);
     if (!active.length) {
       $body.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px">Пакеты не указаны</p>';
     } else {
@@ -1124,7 +1154,8 @@
       const hasPMin = !Number.isNaN(pMin);
       const hasPMax = !Number.isNaN(pMax);
       const hasPriceAny = hasPMin || hasPMax;
-      const currency = s.pricing_packages?.[0]?.currency || 'AZN';
+      const packages = s._pricing_packages || [];
+      const currency = packages[0]?.currency || 'AZN';
       const priceText = hasPriceAny
         ? (hasPMin && hasPMax ? `${fmt(pMin)}–${fmt(pMax)} ${currency}`
            : hasPMin ? `от ${fmt(pMin)} ${currency}`
@@ -1135,7 +1166,7 @@
       const genresText = Array.isArray(s.genres) && s.genres.length ? s.genres.slice(0, 3).join(', ') : '';
       const langsText = Array.isArray(s.languages) && s.languages.length ? s.languages.map(l => l.toUpperCase()).join(', ') : '';
       const regionsText = Array.isArray(s.regions_covered) && s.regions_covered.length ? s.regions_covered.slice(0, 3).join(', ') : '';
-      const repCount = Array.isArray(s.repertoire) ? s.repertoire.length : 0;
+      const repCount = Array.isArray(s.assignedRepertoireIds) ? s.assignedRepertoireIds.length : 0;
       
       return `
         ${coverUrl ? `<img class="img singer-cover" src="${coverUrl}" alt="${s.name||''}" loading="lazy">` : `<div class="img singer-cover"></div>`}
@@ -1167,8 +1198,8 @@
           
           <div class="btns">
             ${(s.media?.photos?.length || s.media?.videos?.length) ? `<button class="btn singer-media">Медиа</button>` : ''}
-            ${repCount > 0 ? `<button class="btn singer-repertoire">Репертуар (${repCount})</button>` : ''}
-            ${s.pricing_packages?.length ? `<button class="btn singer-packages">Пакеты</button>` : ''}
+            ${repCount > 0 ? `<button class="btn singer-repertoire">Репертуар</button>` : ''}
+            ${(s._pricing_packages?.length) ? `<button class="btn singer-packages">Пакеты (${s._pricing_packages.length})</button>` : ''}
             ${(s.phones?.length || s.contact_public) ? `<button class="btn singer-contacts">Контакты</button>` : ''}
           </div>
         </div>
@@ -1308,17 +1339,37 @@
       const snap = await getDocs(collection(db, collectionName));
       const items = [];
       let skippedCount = 0;
-      snap.forEach(d => {
+      
+      for (const d of snap.docs) {
         const data = d.data();
         // Для певцов фильтруем только published
         if (catalog === 'singers' && data.status !== 'published') {
           console.log(`❌ Skipping singer ${d.id}: status = "${data.status}" (not "published")`);
           skippedCount++;
-          return;
+          continue;
         }
-        console.log(`✅ Adding ${catalog} ${d.id}: status = ${data.status || 'N/A'}`);
-        items.push({ id: d.id, ...data });
-      });
+        
+        const item = { id: d.id, ...data };
+        
+        // Для певцов загружаем pricing_packages из субколлекции
+        if (catalog === 'singers') {
+          try {
+            const packagesSnap = await getDocs(collection(db, 'singers', d.id, 'pricing_packages'));
+            item._pricing_packages = [];
+            packagesSnap.forEach(pkgDoc => {
+              item._pricing_packages.push({ id: pkgDoc.id, ...pkgDoc.data() });
+            });
+            console.log(`✅ Adding singer ${d.id}: ${item._pricing_packages.length} packages`);
+          } catch (err) {
+            console.warn(`⚠️ Failed to load packages for singer ${d.id}:`, err);
+            item._pricing_packages = [];
+          }
+        } else {
+          console.log(`✅ Adding ${catalog} ${d.id}`);
+        }
+        
+        items.push(item);
+      }
       
       console.log(`Loaded ${items.length} items for catalog ${catalog} (skipped: ${skippedCount})`);
       $status.textContent = items.length === 0 ? `Нет данных в каталоге ${config.title}` : '';
