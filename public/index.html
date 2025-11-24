@@ -190,6 +190,17 @@
     </div>
   </div>
 
+  <!-- Car Details Modal -->
+  <div id="carDetailsModal" class="modal-backdrop" onclick="if(event.target===this) closeCarDetailsModal()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Детали автомобилей</div>
+        <button class="modal-close" onclick="closeCarDetailsModal()">✕</button>
+      </div>
+      <div id="carDetailsBody" class="modal-body"></div>
+    </div>
+  </div>
+
   <!-- Link Config Modal -->
   <div id="linkConfig" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:70">
     <div style="background:#fff;border-radius:16px;max-width:520px;width:92vw;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)">
@@ -716,10 +727,101 @@
     document.body.style.overflow = '';
   }
 
+  // === CAR DETAILS MODAL ===
+  function openCarDetailsModal(car) {
+    if (!car) return;
+    const $modal = document.getElementById('carDetailsModal');
+    const $body = document.getElementById('carDetailsBody');
+    
+    let html = '<div style="display:grid;gap:16px">';
+    
+    if (Array.isArray(car.cars) && car.cars.length > 0) {
+      car.cars.forEach((c, idx) => {
+        const brand = c.brand || '';
+        const model = c.model || '';
+        const bodyType = c.body_type || '';
+        const carClass = c.class || '';
+        const year = c.year || '';
+        const doors = c.doors || '';
+        const seats = c.seats || '';
+        const color = c.color || '';
+        
+        // Фото автомобиля
+        const photo = Array.isArray(c.media?.photos) && c.media.photos.length ? c.media.photos[0] : null;
+        
+        // Особенности
+        const features = [];
+        if (Array.isArray(c.car_features)) {
+          features.push(...c.car_features);
+        }
+        
+        // Опции передачи
+        const handover = c.handover || {};
+        const handoverMode = handover.mode || '';
+        const selfDrive = handover.self_drive?.enabled ? 'Да' : 'Нет';
+        const withDriver = handover.with_driver?.driver_languages?.length 
+          ? `Да (${handover.with_driver.driver_languages.join(', ')})` 
+          : 'Нет';
+        
+        html += `
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff">
+            ${photo ? `<img src="${photo}" alt="${brand} ${model}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:12px">` : ''}
+            
+            <div style="font-weight:600;font-size:16px;margin-bottom:8px">${brand} ${model}</div>
+            
+            <div style="display:grid;gap:6px;font-size:14px;color:#64748b">
+              ${bodyType ? `<div><strong>Тип кузова:</strong> ${bodyType}</div>` : ''}
+              ${carClass ? `<div><strong>Класс:</strong> ${carClass}</div>` : ''}
+              ${year ? `<div><strong>Год:</strong> ${year}</div>` : ''}
+              ${color ? `<div><strong>Цвет:</strong> ${color}</div>` : ''}
+              ${doors ? `<div><strong>Дверей:</strong> ${doors}</div>` : ''}
+              ${seats ? `<div><strong>Мест:</strong> ${seats}</div>` : ''}
+            </div>
+            
+            ${features.length ? `
+              <div style="margin-top:10px">
+                <div style="font-weight:600;font-size:14px;margin-bottom:6px">Особенности:</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  ${features.map(f => `<span style="background:#f1f5f9;padding:4px 10px;border-radius:6px;font-size:13px">${f}</span>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${handoverMode ? `
+              <div style="margin-top:10px">
+                <div style="font-weight:600;font-size:14px;margin-bottom:6px">Варианты передачи:</div>
+                <div style="font-size:14px;color:#64748b">
+                  <div><strong>Режим:</strong> ${handoverMode}</div>
+                  <div><strong>Самостоятельное вождение:</strong> ${selfDrive}</div>
+                  <div><strong>С водителем:</strong> ${withDriver}</div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+    } else {
+      html += '<p style="color:#6b7280;text-align:center;padding:20px">Нет данных об автомобилях</p>';
+    }
+    
+    html += '</div>';
+    $body.innerHTML = html;
+    
+    $modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeCarDetailsModal() {
+    const $modal = document.getElementById('carDetailsModal');
+    $modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
   // Bind modal events
   window.closeRepertoireModal = closeRepertoireModal;
   window.closePackagesModal = closePackagesModal;
   window.closeContactsModal = closeContactsModal;
+  window.closeCarDetailsModal = closeCarDetailsModal;
 
   // ждём DOM — тут мы берём все элементы и вешаем обработчики
   window.addEventListener('DOMContentLoaded', async () => {
@@ -1517,7 +1619,7 @@
           </div>` : ''}
           
           <div class="btns">
-            ${car.contact_person ? `<button class="btn car-contact">Контакт</button>` : ''}
+            ${Array.isArray(car.cars) && car.cars.length ? `<button class="btn car-details">Детали (${car.cars.length})</button>` : ''}
           </div>
         </div>
       `;
@@ -1537,13 +1639,7 @@
         });
       }
       
-      card.querySelector('.car-contact')?.addEventListener('click', () => {
-        if (!car.contact_person) return;
-        const name = car.contact_person || 'Контакт';
-        const phone = car.messengers?.whatsapp || car.phones?.[0] || '';
-        const msg = `Контакт:\n${name}${phone ? '\nТелефон: ' + phone : ''}`;
-        alert(msg);
-      });
+      card.querySelector('.car-details')?.addEventListener('click', () => openCarDetailsModal(car));
       
       const coverEl = card.querySelector('.car-cover');
       coverEl?.addEventListener('click', () => {
