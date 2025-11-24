@@ -593,70 +593,54 @@
     const $modal = document.getElementById('contactsModal');
     const $body = document.getElementById('contactsBody');
     
-    const socialIcons = {
-      instagram: '📷',
-      facebook: '👥',
-      youtube: '▶️',
-      tiktok: '🎵',
-      twitter: '🐦',
-      vk: '🔵',
-      telegram: '✈️'
+    const socialLabels = {
+      instagram: 'Instagram',
+      facebook: 'Facebook',
+      youtube: 'YouTube',
+      tiktok: 'TikTok',
+      twitter: 'Twitter / X',
+      vk: 'ВКонтакте',
+      telegram: 'Telegram'
     };
     
-    const socialColors = {
-      instagram: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
-      facebook: '#1877f2',
-      youtube: '#ff0000',
-      tiktok: '#000000',
-      twitter: '#1da1f2',
-      vk: '#0077ff',
-      telegram: '#0088cc'
-    };
-    
-    let html = '<div style="display:grid;gap:10px">';
+    let html = '<div style="display:grid;gap:1px;background:#e5e7eb;border-radius:10px;overflow:hidden">';
     
     if (singer.contact_public && typeof singer.contact_public === 'object') {
       const entries = Object.entries(singer.contact_public).filter(([k, v]) => v);
       
       if (entries.length === 0) {
-        html += '<p style="color:#6b7280;text-align:center;padding:20px">Соцсети не указаны</p>';
+        html += '<p style="color:#6b7280;text-align:center;padding:24px;background:#fff;margin:0">Соцсети не указаны</p>';
       } else {
         entries.forEach(([key, val]) => {
-          const icon = socialIcons[key.toLowerCase()] || '🔗';
-          const color = socialColors[key.toLowerCase()] || '#64748b';
-          const displayName = key.charAt(0).toUpperCase() + key.slice(1);
+          const displayName = socialLabels[key.toLowerCase()] || (key.charAt(0).toUpperCase() + key.slice(1));
           
           html += `
             <a href="${val}" target="_blank" rel="noopener noreferrer" 
                style="
                  display:flex;
                  align-items:center;
+                 justify-content:space-between;
                  gap:12px;
-                 padding:14px 16px;
-                 background:${typeof color === 'string' && color.startsWith('linear') ? color : '#fff'};
-                 ${typeof color === 'string' && !color.startsWith('linear') ? 'border-left:4px solid ' + color + ';' : ''}
-                 border-radius:12px;
+                 padding:16px 18px;
+                 background:#ffffff;
                  text-decoration:none;
-                 color:#1e293b;
+                 color:#0f172a;
                  font-weight:500;
-                 box-shadow:0 1px 3px rgba(0,0,0,0.1);
-                 transition:transform 0.2s, box-shadow 0.2s;
+                 transition:background 0.15s;
                "
-               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
-               onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)'"
+               onmouseover="this.style.background='#f8fafc'"
+               onmouseout="this.style.background='#ffffff'"
             >
-              <span style="font-size:24px;${typeof color === 'string' && color.startsWith('linear') ? 'filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2))' : ''}">${icon}</span>
-              <div style="flex:1">
-                <div style="font-size:15px;margin-bottom:2px">${displayName}</div>
-                <div style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</div>
-              </div>
-              <span style="color:#94a3b8;font-size:18px">→</span>
+              <span style="font-size:15px;color:#334155">${displayName}</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
+                <path d="M6 3L11 8L6 13" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </a>
           `;
         });
       }
     } else {
-      html += '<p style="color:#6b7280;text-align:center;padding:20px">Соцсети не указаны</p>';
+      html += '<p style="color:#6b7280;text-align:center;padding:24px;background:#fff;margin:0">Соцсети не указаны</p>';
     }
     
     html += '</div>';
