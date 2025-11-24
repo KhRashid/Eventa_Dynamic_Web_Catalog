@@ -181,13 +181,9 @@
   </div>
 
   <!-- Social Links Modal -->
-  <div id="contactsModal" class="modal-backdrop">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">🌐 Соцсети</div>
-        <button class="modal-close" onclick="closeContactsModal()">✕</button>
-      </div>
-      <div id="contactsBody" class="modal-body"></div>
+  <div id="contactsModal" class="modal-backdrop" onclick="if(event.target===this) closeContactsModal()">
+    <div class="modal-content" style="padding:0;max-width:min(600px,92vw);border-radius:20px">
+      <div id="contactsBody" class="modal-body" style="padding:0;position:relative"></div>
     </div>
   </div>
 
@@ -603,13 +599,35 @@
       telegram: { label: 'Telegram', icon: 'https://cdn-icons-png.flaticon.com/512/2111/2111646.png', bg: '#0088cc' }
     };
     
-    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;padding:8px">';
+    let html = `
+      <button onclick="closeContactsModal()" style="
+        position:absolute;
+        top:16px;
+        right:16px;
+        width:32px;
+        height:32px;
+        border:none;
+        background:#f1f5f9;
+        border-radius:50%;
+        cursor:pointer;
+        font-size:18px;
+        color:#64748b;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:10;
+        transition:all 0.2s;
+      " onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
+      <div style="padding:24px 24px 28px;">
+        <h3 style="margin:0 0 20px;font-size:18px;color:#0f172a;font-weight:600">Соцсети</h3>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center">
+    `;
     
     if (singer.contact_public && typeof singer.contact_public === 'object') {
       const entries = Object.entries(singer.contact_public).filter(([k, v]) => v);
       
       if (entries.length === 0) {
-        html += '<p style="color:#6b7280;text-align:center;padding:24px;grid-column:1/-1;margin:0">Соцсети не указаны</p>';
+        html += '<p style="color:#6b7280;text-align:center;padding:24px;margin:0;width:100%">Соцсети не указаны</p>';
       } else {
         entries.forEach(([key, val]) => {
           const data = socialData[key.toLowerCase()] || { 
@@ -625,30 +643,31 @@
                  flex-direction:column;
                  align-items:center;
                  gap:10px;
-                 padding:20px 16px;
+                 padding:16px;
                  background:#ffffff;
                  border:1px solid #e5e7eb;
-                 border-radius:12px;
+                 border-radius:16px;
                  text-decoration:none;
                  color:#0f172a;
                  font-weight:500;
-                 font-size:14px;
+                 font-size:13px;
                  text-align:center;
                  transition:all 0.2s;
-                 box-shadow:0 1px 2px rgba(0,0,0,0.05);
+                 box-shadow:0 1px 3px rgba(0,0,0,0.08);
+                 min-width:110px;
                "
-               onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.1)';this.style.borderColor='#cbd5e1'"
-               onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.05)';this.style.borderColor='#e5e7eb'"
+               onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.12)'"
+               onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.08)'"
             >
               <div style="
-                width:48px;
-                height:48px;
-                border-radius:12px;
+                width:56px;
+                height:56px;
+                border-radius:14px;
                 background:${data.bg};
                 display:flex;
                 align-items:center;
                 justify-content:center;
-                padding:10px;
+                padding:12px;
               ">
                 <img src="${data.icon}" alt="${data.label}" style="width:100%;height:100%;object-fit:contain;filter:brightness(0) invert(1)">
               </div>
@@ -658,10 +677,10 @@
         });
       }
     } else {
-      html += '<p style="color:#6b7280;text-align:center;padding:24px;grid-column:1/-1;margin:0">Соцсети не указаны</p>';
+      html += '<p style="color:#6b7280;text-align:center;padding:24px;margin:0;width:100%">Соцсети не указаны</p>';
     }
     
-    html += '</div>';
+    html += '</div></div>';
     $body.innerHTML = html;
     
     $modal.classList.add('show');
