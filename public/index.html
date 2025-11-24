@@ -244,7 +244,14 @@
 
   // === CONFIG ===
   const CFG = window.__FIREBASE_CONFIG__;
-  const COL = (window.__FIREBASE_COLLECTIONS__ || { venues:"venues", shortlists:"shortlists", singers:"singers", singer_shortlists:"singer_shortlists" });
+  const COL = (window.__FIREBASE_COLLECTIONS__ || { 
+    venues:"venues", 
+    shortlists:"shortlists", 
+    singers:"singers", 
+    singer_shortlists:"singer_shortlists",
+    car_providers:"car_providers",
+    car_shortlists:"car_shortlists"
+  });
 
   // === CATALOG CONFIGURATION ===
   const CATALOG_CONFIG = {
@@ -1047,7 +1054,7 @@
       if(filtersBound || !$fSearch) return;
       filtersBound = true;
       $fSearch.addEventListener('input', debounce(applyFilters,200));
-      const allFilters = [$fDistrict,$fCap,$fPrice,$fGender,$fGenres,$fLanguages,$fCity].filter(Boolean);
+      const allFilters = [$fDistrict,$fCap,$fPrice,$fGender,$fGenres,$fLanguages,$fCity,$fBodyType,$fBrand].filter(Boolean);
       allFilters.forEach(el=> el.addEventListener('input', applyFilters));
     }
     function applyFilters(){
