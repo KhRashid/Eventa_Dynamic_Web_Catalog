@@ -180,11 +180,11 @@
     </div>
   </div>
 
-  <!-- Contacts Modal -->
+  <!-- Social Links Modal -->
   <div id="contactsModal" class="modal-backdrop">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title">Контакты</div>
+        <div class="modal-title">🌐 Соцсети</div>
         <button class="modal-close" onclick="closeContactsModal()">✕</button>
       </div>
       <div id="contactsBody" class="modal-body"></div>
@@ -593,24 +593,70 @@
     const $modal = document.getElementById('contactsModal');
     const $body = document.getElementById('contactsBody');
     
-    let html = '<div style="display:grid;gap:12px">';
+    const socialIcons = {
+      instagram: '📷',
+      facebook: '👥',
+      youtube: '▶️',
+      tiktok: '🎵',
+      twitter: '🐦',
+      vk: '🔵',
+      telegram: '✈️'
+    };
     
-    if (Array.isArray(singer.phones) && singer.phones.length) {
-      html += '<div><div style="font-weight:600;margin-bottom:6px">📞 Телефоны:</div><ul style="list-style:none;padding:0;margin:0">';
-      singer.phones.forEach(ph => {
-        html += `<li style="padding:4px 0"><a href="tel:${ph}" style="color:#2563eb">${ph}</a></li>`;
-      });
-      html += '</ul></div>';
-    }
+    const socialColors = {
+      instagram: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+      facebook: '#1877f2',
+      youtube: '#ff0000',
+      tiktok: '#000000',
+      twitter: '#1da1f2',
+      vk: '#0077ff',
+      telegram: '#0088cc'
+    };
+    
+    let html = '<div style="display:grid;gap:10px">';
     
     if (singer.contact_public && typeof singer.contact_public === 'object') {
-      html += '<div><div style="font-weight:600;margin-bottom:6px">🌐 Соцсети:</div><ul style="list-style:none;padding:0;margin:0">';
-      Object.entries(singer.contact_public).forEach(([key, val]) => {
-        if (val) {
-          html += `<li style="padding:4px 0"><a href="${val}" target="_blank" rel="noopener noreferrer" style="color:#2563eb">${key}: ${val}</a></li>`;
-        }
-      });
-      html += '</ul></div>';
+      const entries = Object.entries(singer.contact_public).filter(([k, v]) => v);
+      
+      if (entries.length === 0) {
+        html += '<p style="color:#6b7280;text-align:center;padding:20px">Соцсети не указаны</p>';
+      } else {
+        entries.forEach(([key, val]) => {
+          const icon = socialIcons[key.toLowerCase()] || '🔗';
+          const color = socialColors[key.toLowerCase()] || '#64748b';
+          const displayName = key.charAt(0).toUpperCase() + key.slice(1);
+          
+          html += `
+            <a href="${val}" target="_blank" rel="noopener noreferrer" 
+               style="
+                 display:flex;
+                 align-items:center;
+                 gap:12px;
+                 padding:14px 16px;
+                 background:${typeof color === 'string' && color.startsWith('linear') ? color : '#fff'};
+                 ${typeof color === 'string' && !color.startsWith('linear') ? 'border-left:4px solid ' + color + ';' : ''}
+                 border-radius:12px;
+                 text-decoration:none;
+                 color:#1e293b;
+                 font-weight:500;
+                 box-shadow:0 1px 3px rgba(0,0,0,0.1);
+                 transition:transform 0.2s, box-shadow 0.2s;
+               "
+               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+               onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)'"
+            >
+              <span style="font-size:24px;${typeof color === 'string' && color.startsWith('linear') ? 'filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2))' : ''}">${icon}</span>
+              <div style="flex:1">
+                <div style="font-size:15px;margin-bottom:2px">${displayName}</div>
+                <div style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</div>
+              </div>
+              <span style="color:#94a3b8;font-size:18px">→</span>
+            </a>
+          `;
+        });
+      }
+    } else {
+      html += '<p style="color:#6b7280;text-align:center;padding:20px">Соцсети не указаны</p>';
     }
     
     html += '</div>';
