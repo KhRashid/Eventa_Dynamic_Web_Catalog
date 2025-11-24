@@ -733,78 +733,118 @@
     const $modal = document.getElementById('carDetailsModal');
     const $body = document.getElementById('carDetailsBody');
     
-    let html = '<div style="display:grid;gap:16px">';
+    const brand = car.brand || '';
+    const model = car.model || '';
+    const bodyType = car.body_type || '';
+    const carClass = car.class || '';
+    const year = car.year || '';
+    const doors = car.doors || '';
+    const seats = car.seats || '';
+    const color = car.color || '';
+    const providerName = car.provider_name || car._providerName || '';
     
-    if (Array.isArray(car.cars) && car.cars.length > 0) {
-      car.cars.forEach((c, idx) => {
-        const brand = c.brand || '';
-        const model = c.model || '';
-        const bodyType = c.body_type || '';
-        const carClass = c.class || '';
-        const year = c.year || '';
-        const doors = c.doors || '';
-        const seats = c.seats || '';
-        const color = c.color || '';
-        
-        // Фото автомобиля
-        const photo = Array.isArray(c.media?.photos) && c.media.photos.length ? c.media.photos[0] : null;
-        
-        // Особенности
-        const features = [];
-        if (Array.isArray(c.car_features)) {
-          features.push(...c.car_features);
-        }
-        
-        // Опции передачи
-        const handover = c.handover || {};
-        const handoverMode = handover.mode || '';
-        const selfDrive = handover.self_drive?.enabled ? 'Да' : 'Нет';
-        const withDriver = handover.with_driver?.driver_languages?.length 
-          ? `Да (${handover.with_driver.driver_languages.join(', ')})` 
-          : 'Нет';
-        
-        html += `
-          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff">
-            ${photo ? `<img src="${photo}" alt="${brand} ${model}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:12px">` : ''}
-            
-            <div style="font-weight:600;font-size:16px;margin-bottom:8px">${brand} ${model}</div>
-            
-            <div style="display:grid;gap:6px;font-size:14px;color:#64748b">
-              ${bodyType ? `<div><strong>Тип кузова:</strong> ${bodyType}</div>` : ''}
-              ${carClass ? `<div><strong>Класс:</strong> ${carClass}</div>` : ''}
-              ${year ? `<div><strong>Год:</strong> ${year}</div>` : ''}
-              ${color ? `<div><strong>Цвет:</strong> ${color}</div>` : ''}
-              ${doors ? `<div><strong>Дверей:</strong> ${doors}</div>` : ''}
-              ${seats ? `<div><strong>Мест:</strong> ${seats}</div>` : ''}
-            </div>
-            
-            ${features.length ? `
-              <div style="margin-top:10px">
-                <div style="font-weight:600;font-size:14px;margin-bottom:6px">Особенности:</div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  ${features.map(f => `<span style="background:#f1f5f9;padding:4px 10px;border-radius:6px;font-size:13px">${f}</span>`).join('')}
-                </div>
-              </div>
-            ` : ''}
-            
-            ${handoverMode ? `
-              <div style="margin-top:10px">
-                <div style="font-weight:600;font-size:14px;margin-bottom:6px">Варианты передачи:</div>
-                <div style="font-size:14px;color:#64748b">
-                  <div><strong>Режим:</strong> ${handoverMode}</div>
-                  <div><strong>Самостоятельное вождение:</strong> ${selfDrive}</div>
-                  <div><strong>С водителем:</strong> ${withDriver}</div>
-                </div>
-              </div>
-            ` : ''}
-          </div>
-        `;
-      });
-    } else {
-      html += '<p style="color:#6b7280;text-align:center;padding:20px">Нет данных об автомобилях</p>';
+    // Все фото автомобиля
+    const photos = Array.isArray(car.media?.photos) ? car.media.photos : [];
+    
+    // Особенности
+    const features = Array.isArray(car.car_features) ? car.car_features : [];
+    
+    // Опции передачи
+    const handover = car.handover || {};
+    const handoverMode = handover.mode || '';
+    const selfDrive = handover.self_drive?.enabled ? 'Да' : 'Нет';
+    const withDriver = handover.with_driver?.driver_languages?.length 
+      ? `Да (языки: ${handover.with_driver.driver_languages.join(', ')})` 
+      : 'Нет';
+    
+    // Цена
+    let priceText = '';
+    if (car.pricing) {
+      const base = car.pricing.price?.base;
+      const extraHour = car.pricing.price?.extra_hour_fee;
+      const currency = car.pricing.currency || 'AZN';
+      const mode = car.pricing.mode || 'hourly';
+      const minTime = car.pricing.min_time || '';
+      
+      if (base && !isNaN(base)) {
+        const modeLabel = mode === 'hourly' ? '/час' : mode === 'daily' ? '/день' : '';
+        priceText = `${fmt(base)} ${currency}${modeLabel}`;
+        if (minTime) priceText += ` (минимум ${minTime} ${mode === 'hourly' ? 'ч' : 'д'})`;
+        if (extraHour && !isNaN(extraHour)) priceText += `<br>Доп. час: ${fmt(extraHour)} ${currency}`;
+      }
     }
     
-    html += '</div>';
+    // Города и точки выдачи
+    const cities = Array.isArray(car.coverage_cities) ? car.coverage_cities.join(', ') : '';
+    const pickupPoints = Array.isArray(car.pickup_points) 
+      ? car.pickup_points.map(p => p.label || p.address).filter(Boolean).join('; ')
+      : '';
+    
+    let html = `
+      <div style="display:grid;gap:16px">
+        ${photos.length > 0 ? `
+          <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+            ${photos.map(url => `<img src="${url}" alt="${brand} ${model}" style="width:100%;height:120px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openGallery(${JSON.stringify(photos)}, ${photos.indexOf(url)})">`).join('')}
+          </div>
+        ` : ''}
+        
+        <div>
+          <h3 style="margin:0 0 12px;font-size:20px">${brand} ${model}</h3>
+          ${providerName ? `<div style="color:#6b7280;font-size:14px;margin-bottom:12px">Провайдер: <strong>${providerName}</strong></div>` : ''}
+          
+          <div style="display:grid;gap:8px;font-size:14px">
+            ${bodyType ? `<div><strong>Тип кузова:</strong> ${bodyType}</div>` : ''}
+            ${carClass ? `<div><strong>Класс:</strong> ${carClass}</div>` : ''}
+            ${year ? `<div><strong>Год:</strong> ${year}</div>` : ''}
+            ${color ? `<div><strong>Цвет:</strong> ${color}</div>` : ''}
+            ${doors ? `<div><strong>Дверей:</strong> ${doors}</div>` : ''}
+            ${seats ? `<div><strong>Мест:</strong> ${seats}</div>` : ''}
+          </div>
+        </div>
+        
+        ${priceText ? `
+          <div style="background:#f8fafc;padding:12px;border-radius:8px">
+            <div style="font-weight:600;margin-bottom:6px">💰 Цена:</div>
+            <div style="font-size:14px">${priceText}</div>
+          </div>
+        ` : ''}
+        
+        ${features.length ? `
+          <div>
+            <div style="font-weight:600;margin-bottom:8px">✨ Особенности:</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${features.map(f => `<span style="background:#f1f5f9;padding:6px 12px;border-radius:8px;font-size:13px">${f}</span>`).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${cities ? `
+          <div>
+            <div style="font-weight:600;margin-bottom:6px">📍 Города обслуживания:</div>
+            <div style="font-size:14px;color:#64748b">${cities}</div>
+          </div>
+        ` : ''}
+        
+        ${pickupPoints ? `
+          <div>
+            <div style="font-weight:600;margin-bottom:6px">📌 Точки выдачи:</div>
+            <div style="font-size:14px;color:#64748b">${pickupPoints}</div>
+          </div>
+        ` : ''}
+        
+        ${handoverMode ? `
+          <div style="background:#f8fafc;padding:12px;border-radius:8px">
+            <div style="font-weight:600;margin-bottom:8px">🚗 Варианты передачи:</div>
+            <div style="font-size:14px;display:grid;gap:4px">
+              <div><strong>Режим:</strong> ${handoverMode === 'driver_only' ? 'Только с водителем' : handoverMode === 'self_only' ? 'Только самостоятельное' : 'Оба варианта'}</div>
+              <div><strong>Самостоятельное вождение:</strong> ${selfDrive}</div>
+              <div><strong>С водителем:</strong> ${withDriver}</div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    
     $body.innerHTML = html;
     
     $modal.classList.add('show');
@@ -1094,7 +1134,7 @@
     function populateBodyTypes(list) {
       if (!$fBodyType) return;
       const bodyTypes = Array.from(new Set(
-        list.flatMap(car => (car.cars || []).map(c => c.body_type).filter(Boolean))
+        list.map(car => car.body_type).filter(Boolean)
       )).sort();
       $fBodyType.innerHTML =
         '<option value="">Все типы кузова</option>' +
@@ -1104,7 +1144,7 @@
     function populateBrands(list) {
       if (!$fBrand) return;
       const brands = Array.from(new Set(
-        list.flatMap(car => (car.cars || []).map(c => c.brand).filter(Boolean))
+        list.map(car => car.brand).filter(Boolean)
       )).sort();
       $fBrand.innerHTML =
         '<option value="">Все марки</option>' +
@@ -1276,36 +1316,29 @@
         _viewVenues = _allVenues.filter(car => {
           // поиск
           if (q) {
-            const carModels = Array.isArray(car.cars) ? car.cars.map(c => [c.brand, c.model].filter(Boolean).join(' ')).join(' ') : '';
-            const hay = [car.name, carModels, (car.tags||[]).join(' ')]
+            const hay = [car.brand, car.model, car.body_type, car.class, car.provider_name, (car.car_features||[]).join(' ')]
               .filter(Boolean).join(' ').toLowerCase();
             if (!hay.includes(q)) {
-              console.log(`❌ ${car.id} (${car.name}): filtered by search "${q}"`);
+              console.log(`❌ ${car.id}: filtered by search "${q}"`);
               return false;
             }
           }
           
           // тип кузова
-          if (bodyType && Array.isArray(car.cars)) {
-            const hasBodyType = car.cars.some(c => c.body_type === bodyType);
-            if (!hasBodyType) {
-              console.log(`❌ ${car.id} (${car.name}): filtered by bodyType (need: ${bodyType})`);
-              return false;
-            }
+          if (bodyType && car.body_type !== bodyType) {
+            console.log(`❌ ${car.id}: filtered by bodyType (has: ${car.body_type}, need: ${bodyType})`);
+            return false;
           }
           
           // марка
-          if (brand && Array.isArray(car.cars)) {
-            const hasBrand = car.cars.some(c => c.brand === brand);
-            if (!hasBrand) {
-              console.log(`❌ ${car.id} (${car.name}): filtered by brand (need: ${brand})`);
-              return false;
-            }
+          if (brand && car.brand !== brand) {
+            console.log(`❌ ${car.id}: filtered by brand (has: ${car.brand}, need: ${brand})`);
+            return false;
           }
           
           // город
           if (city && (!Array.isArray(car.coverage_cities) || !car.coverage_cities.includes(city))) {
-            console.log(`❌ ${car.id} (${car.name}): filtered by city (has: ${car.coverage_cities}, need: ${city})`);
+            console.log(`❌ ${car.id}: filtered by city (has: ${car.coverage_cities}, need: ${city})`);
             return false;
           }
           
@@ -1314,7 +1347,7 @@
           const pMin = basePrice && !isNaN(basePrice) ? basePrice : NaN;
           const pMax = pMin;
           if (!priceMatches(pMin, pMax, priceLo, priceHi)) {
-            console.log(`❌ ${car.id} (${car.name}): filtered by price (has: ${pMin}, need: ${priceLo}-${priceHi})`);
+            console.log(`❌ ${car.id}: filtered by price (has: ${pMin}, need: ${priceLo}-${priceHi})`);
             return false;
           }
           
@@ -1542,13 +1575,10 @@
 
     // === РЕНДЕР КАРТОЧКИ АВТОМОБИЛЯ ===
     function renderCarCard(car) {
-      // Получаем фото из media.photos или первый автомобиль в cars
-      let coverUrl = null;
-      if (Array.isArray(car.media?.photos) && car.media.photos.length) {
-        coverUrl = car.media.photos[0];
-      } else if (Array.isArray(car.cars) && car.cars.length && car.cars[0].media?.photos?.length) {
-        coverUrl = car.cars[0].media.photos[0];
-      }
+      // Теперь car - это отдельный автомобиль, а не провайдер
+      const coverUrl = Array.isArray(car.media?.photos) && car.media.photos.length 
+        ? car.media.photos[0] 
+        : null;
       
       const svgPin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
         <path d="M12 22s7-5.33 7-12a7 7 0 10-14 0c0 6.67 7 12 7 12z" stroke="currentColor" stroke-width="1.7" fill="none"/>
@@ -1563,8 +1593,24 @@
         <circle cx="7" cy="14" r="1.5" fill="currentColor"/>
         <circle cx="17" cy="14" r="1.5" fill="currentColor"/>
       </svg>`;
+      const svgUser = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M4 20a8 8 0 0116 0" stroke="currentColor" stroke-width="1.7"/>
+      </svg>`;
       
-      // Цена из pricing
+      // Информация об автомобиле
+      const brand = car.brand || '';
+      const model = car.model || '';
+      const bodyType = car.body_type || '';
+      const carClass = car.class || '';
+      const year = car.year || '';
+      const color = car.color || '';
+      const seats = car.seats || '';
+      const providerName = car.provider_name || car._providerName || '';
+      
+      const carTitle = [brand, model].filter(Boolean).join(' ') || 'Автомобиль';
+      
+      // Цена из pricing провайдера
       let priceText = '';
       if (car.pricing) {
         const base = car.pricing.price?.base;
@@ -1576,41 +1622,38 @@
         }
       }
       
-      // Собираем автомобили (первые 3)
-      const carsInfo = [];
-      if (Array.isArray(car.cars)) {
-        car.cars.slice(0, 3).forEach(c => {
-          const brand = c.brand || '';
-          const model = c.model || '';
-          const bodyType = c.body_type || '';
-          const year = c.year || '';
-          let carLabel = [brand, model].filter(Boolean).join(' ');
-          if (bodyType) carLabel += ` (${bodyType})`;
-          if (year) carLabel += ` ${year}`;
-          if (carLabel) carsInfo.push(carLabel);
-        });
-      }
-      
+      // Города
       const cityText = Array.isArray(car.coverage_cities) && car.coverage_cities.length 
         ? car.coverage_cities.slice(0, 2).join(', ') 
         : '';
       
+      // Особенности
+      const features = Array.isArray(car.car_features) && car.car_features.length
+        ? car.car_features.slice(0, 3).join(' • ')
+        : '';
+      
       return `
-        ${coverUrl ? `<img class="img car-cover" src="${coverUrl}" alt="${car.name||''}" loading="lazy">` : `<div class="img car-cover"></div>`}
+        ${coverUrl ? `<img class="img car-cover" src="${coverUrl}" alt="${carTitle}" loading="lazy">` : `<div class="img car-cover"></div>`}
         <div class="body">
           <div style="margin-bottom:8px">
-            <div style="font-weight:600;font-size:18px">${car.name||'Без названия'}</div>
+            <div style="font-weight:600;font-size:18px">${carTitle}</div>
+            ${providerName ? `<div style="font-size:13px;color:#9ca3af">${providerName}</div>` : ''}
           </div>
           
           <div style="font-size:14px;color:#64748b;display:grid;gap:4px;margin-bottom:10px">
+            ${bodyType || carClass ? `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-flex;line-height:0;">${svgCar}</span>
+              <span>${[bodyType, carClass, year].filter(Boolean).join(' • ')}</span>
+            </div>` : ''}
             ${cityText ? `<div style="display:flex;align-items:center;gap:6px;">
               <span style="display:inline-flex;line-height:0;">${svgPin}</span>
               <span>${cityText}</span>
             </div>` : ''}
-            ${carsInfo.length ? `<div style="display:flex;align-items:flex-start;gap:6px;">
-              <span style="display:inline-flex;line-height:0;margin-top:2px;">${svgCar}</span>
-              <span>${carsInfo.join(' • ')}</span>
+            ${seats ? `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-flex;line-height:0;">${svgUser}</span>
+              <span>${seats} мест</span>
             </div>` : ''}
+            ${features ? `<div style="font-size:13px;color:#94a3b8;margin-top:2px">${features}</div>` : ''}
           </div>
           
           ${priceText ? `<div style="display:flex;align-items:center;gap:6px;font-size:18px;font-weight:700;color:#2563eb;margin-bottom:10px">
@@ -1619,25 +1662,15 @@
           </div>` : ''}
           
           <div class="btns">
-            ${Array.isArray(car.cars) && car.cars.length ? `<button class="btn car-details">Детали (${car.cars.length})</button>` : ''}
+            <button class="btn car-details">Подробнее</button>
           </div>
         </div>
       `;
     }
 
     function bindCarCardActions(card, car) {
-      // Собираем все фото
-      const allPhotos = [];
-      if (Array.isArray(car.media?.photos)) {
-        allPhotos.push(...car.media.photos.filter(Boolean));
-      }
-      if (Array.isArray(car.cars)) {
-        car.cars.forEach(c => {
-          if (Array.isArray(c.media?.photos)) {
-            allPhotos.push(...c.media.photos.filter(Boolean));
-          }
-        });
-      }
+      // Собираем все фото этого автомобиля
+      const allPhotos = Array.isArray(car.media?.photos) ? car.media.photos.filter(Boolean) : [];
       
       card.querySelector('.car-details')?.addEventListener('click', () => openCarDetailsModal(car));
       
@@ -1752,6 +1785,29 @@
         if (catalog === 'singers' && data.status !== 'published') {
           console.log(`❌ Skipping singer ${d.id}: status = "${data.status}" (not "published")`);
           skippedCount++;
+          continue;
+        }
+        
+        // Для автомобилей разворачиваем массив cars в отдельные элементы
+        if (catalog === 'cars' && Array.isArray(data.cars)) {
+          data.cars.forEach((car, idx) => {
+            const carItem = {
+              id: `${d.id}_${idx}`,
+              _providerId: d.id,
+              _providerName: data.name,
+              ...car,
+              // Наследуем данные провайдера
+              provider_name: data.name,
+              coverage_cities: data.coverage_cities,
+              pickup_points: data.pickup_points,
+              pricing: data.pricing,
+              contact_person: data.contact_person,
+              messengers: data.messengers,
+              phones: data.phones
+            };
+            items.push(carItem);
+            console.log(`✅ Adding car ${carItem.id}: ${car.brand} ${car.model}`);
+          });
           continue;
         }
         
