@@ -17,7 +17,12 @@
       appId: "1:884896771261:web:b60d950938a924a71a5bd4",
       measurementId: "G-4H9BVWN184"
     };
-    window.__FIREBASE_COLLECTIONS__ = { venues: "venues", shortlists: "shortlists" };
+    window.__FIREBASE_COLLECTIONS__ = { 
+      venues: "venues", 
+      shortlists: "shortlists",
+      singers: "singers",
+      singer_shortlists: "singer_shortlists"
+    };
   </script>
 
   <!-- БАЗОВЫЕ СТИЛИ СТРАНИЦЫ -->
@@ -42,6 +47,9 @@
     .footer{margin:24px 0 12px;color:var(--muted);font-size:12px;text-align:center}
     .note{font-size:12px;color:var(--muted)}
     .inp{padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
+    .catalog-tab{border:none;background:transparent;padding:12px 20px;font-size:15px;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+    .catalog-tab:hover{background:#f1f5f9}
+    .catalog-tab.active{border-bottom-color:#2563eb;color:#2563eb;font-weight:600}
     @media (max-width:900px){ #filters{grid-template-columns:1fr 1fr; } }
     a.btn, a.btn:link, a.btn:visited, a.btn:hover, a.btn:active {
       text-decoration: none !important;
@@ -66,6 +74,15 @@
     .gallery-thumb{width:80px;height:60px;object-fit:cover;border-radius:8px;opacity:.6;border:2px solid transparent;cursor:pointer}
     .gallery-thumb.active{opacity:1;border-color:#fff}
 
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:55;overflow-y:auto}
+    .modal-backdrop.show{display:flex}
+    .modal-content{background:#fff;border-radius:16px;max-width:min(700px,92vw);max-height:85vh;overflow-y:auto;padding:20px;position:relative}
+    .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px}
+    .modal-title{font-size:20px;font-weight:700}
+    .modal-close{border:none;background:#f1f5f9;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px}
+    .modal-close:hover{background:#e2e8f0}
+    .modal-body{font-size:14px;line-height:1.6}
+
     .select-dot{
       position:absolute;top:10px;left:10px;width:22px;height:22px;border-radius:999px;
       border:2px solid #fff;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;
@@ -77,7 +94,14 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Картотека площадок</h1>
+    <h1 id="pageTitle">Картотека площадок</h1>
+    
+    <!-- Табы каталогов -->
+    <div id="catalogTabs" style="display:flex;gap:8px;margin:12px 0 16px;border-bottom:2px solid var(--border);padding-bottom:0">
+      <button class="catalog-tab active" data-catalog="venues">Площадки</button>
+      <button class="catalog-tab" data-catalog="singers">Певцы</button>
+    </div>
+
       <div id="toolbar" style="display:flex;gap:10px;align-items:center;margin:10px 0 16px;flex-wrap:wrap">
         <label style="display:flex;gap:8px;align-items:center;">
           <input id="modeToggle" type="checkbox">
@@ -126,6 +150,45 @@
   <div id="toast" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
   background:#111;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:60">
     Скопировано
+  </div>
+
+  <!-- Repertoire Modal -->
+  <div id="repertoireModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Репертуар</div>
+        <button class="modal-close" onclick="closeRepertoireModal()">✕</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <input id="repSearch" type="text" placeholder="Поиск по названию..." class="inp" style="flex:1">
+        <select id="repLangFilter" class="inp" style="width:140px">
+          <option value="">Все языки</option>
+        </select>
+      </div>
+      <div id="repertoireBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Packages Modal -->
+  <div id="packagesModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Пакеты и тарифы</div>
+        <button class="modal-close" onclick="closePackagesModal()">✕</button>
+      </div>
+      <div id="packagesBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Contacts Modal -->
+  <div id="contactsModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Контакты</div>
+        <button class="modal-close" onclick="closeContactsModal()">✕</button>
+      </div>
+      <div id="contactsBody" class="modal-body"></div>
+    </div>
   </div>
 
   <!-- Link Config Modal -->
@@ -182,10 +245,42 @@
 
   // === CONFIG ===
   const CFG = window.__FIREBASE_CONFIG__;
-  const COL = (window.__FIREBASE_COLLECTIONS__ || { venues:"venues", shortlists:"shortlists" });
+  const COL = (window.__FIREBASE_COLLECTIONS__ || { venues:"venues", shortlists:"shortlists", singers:"singers", singer_shortlists:"singer_shortlists" });
+
+  // === CATALOG CONFIGURATION ===
+  const CATALOG_CONFIG = {
+    venues: {
+      collection: 'venues',
+      shortlistCollection: 'shortlists',
+      title: 'Картотека площадок',
+      filterLayout: '2fr 1fr 1fr 1fr',
+      filters: {
+        search: { id: 'fSearch', placeholder: 'Поиск: название, район, теги…', type: 'text' },
+        district: { id: 'fDistrict', placeholder: 'Все районы', type: 'select' },
+        capacity: { id: 'fCap', placeholder: 'Вместимость: 100-300', type: 'text' },
+        price: { id: 'fPrice', placeholder: 'Цена/гость: 20-100', type: 'text' }
+      }
+    },
+    singers: {
+      collection: 'singers',
+      shortlistCollection: 'singer_shortlists',
+      title: 'Каталог певцов',
+      filterLayout: '2fr 1fr 1fr 1fr 1fr 1fr',
+      filters: {
+        search: { id: 'fSearch', placeholder: 'Поиск: имя, псевдоним, теги…', type: 'text' },
+        price: { id: 'fPrice', placeholder: 'Цена выступления: 500-2000', type: 'text' },
+        gender: { id: 'fGender', placeholder: 'Все', type: 'select', options: ['Все', 'female', 'male', 'group', 'duo'] },
+        genres: { id: 'fGenres', placeholder: 'Жанры', type: 'select' },
+        languages: { id: 'fLanguages', placeholder: 'Языки', type: 'select' },
+        city: { id: 'fCity', placeholder: 'Все города', type: 'select' }
+      }
+    }
+  };
+
+  let activeCatalog = 'venues';  // текущий каталог
 
   // === refs для фильтров (объявляем заранее!)
-  let $fSearch, $fDistrict, $fCap, $fPrice;
+  let $fSearch, $fDistrict, $fCap, $fPrice, $fGender, $fGenres, $fLanguages, $fCity;
 
   // === GLOBALS ===
   let db, auth;
@@ -282,6 +377,22 @@
     return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
   };
 
+  // === SINGER-SPECIFIC HELPERS ===
+  function getSingerPrice(singer) {
+    if (!Array.isArray(singer.pricing_packages) || !singer.pricing_packages.length) {
+      return { min: NaN, max: NaN };
+    }
+    const active = singer.pricing_packages.filter(p => p.is_active !== false);
+    const prices = active.map(p => toNum(p.price)).filter(p => !Number.isNaN(p));
+    if (!prices.length) return { min: NaN, max: NaN };
+    return { min: Math.min(...prices), max: Math.max(...prices) };
+  }
+
+  function getGenderLabel(gender) {
+    const labels = { female: 'Женский', male: 'Мужской', group: 'Группа', duo: 'Дуэт' };
+    return labels[gender] || gender;
+  }
+
   function debounce(fn, ms=200){
     let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
   }
@@ -328,8 +439,167 @@
     const low = v.toLowerCase();
     // любые варианты «все районы» считаем пустым значением
     if (v === '' || low === 'все районы' || low === 'all' ) return '';
-    return v;
+    return [];
   }
+
+  // === MODAL HELPERS ===
+  let currentRepertoire = [];
+  let currentSinger = null;
+
+  function openRepertoireModal(singer) {
+    if (!singer || !Array.isArray(singer.repertoire)) return;
+    currentSinger = singer;
+    currentRepertoire = singer.repertoire.slice();
+    
+    const $modal = document.getElementById('repertoireModal');
+    const $body = document.getElementById('repertoireBody');
+    const $search = document.getElementById('repSearch');
+    const $langFilter = document.getElementById('repLangFilter');
+    
+    // Populate language filter
+    const langs = Array.from(new Set(currentRepertoire.map(s => s.language).filter(Boolean))).sort();
+    $langFilter.innerHTML = '<option value="">Все языки</option>' + 
+      langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
+    
+    $search.value = '';
+    $langFilter.value = '';
+    
+    renderRepertoire();
+    $modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeRepertoireModal() {
+    const $modal = document.getElementById('repertoireModal');
+    $modal.classList.remove('show');
+    document.body.style.overflow = '';
+    currentRepertoire = [];
+    currentSinger = null;
+  }
+
+  function renderRepertoire() {
+    const $body = document.getElementById('repertoireBody');
+    const $search = document.getElementById('repSearch');
+    const $langFilter = document.getElementById('repLangFilter');
+    
+    const q = ($search?.value || '').trim().toLowerCase();
+    const lang = $langFilter?.value || '';
+    
+    let filtered = currentRepertoire.filter(song => {
+      if (lang && song.language !== lang) return false;
+      if (q && !(song.title || '').toLowerCase().includes(q) && !(song.original_artist || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+    
+    if (!filtered.length) {
+      $body.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px">Ничего не найдено</p>';
+      return;
+    }
+    
+    // Group by language
+    const byLang = {};
+    filtered.forEach(s => {
+      const l = s.language || 'other';
+      if (!byLang[l]) byLang[l] = [];
+      byLang[l].push(s);
+    });
+    
+    let html = '';
+    Object.keys(byLang).sort().forEach(lang => {
+      html += `<div style="margin-bottom:16px">
+        <div style="font-weight:600;font-size:15px;margin-bottom:8px;color:#475569">
+          ${lang.toUpperCase()} (${byLang[lang].length})
+        </div>
+        <ul style="list-style:none;padding:0;margin:0">`;
+      byLang[lang].forEach(s => {
+        const dur = s.duration_sec ? ` • ${Math.floor(s.duration_sec/60)}:${String(s.duration_sec%60).padStart(2,'0')}` : '';
+        html += `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9">
+          <div style="font-weight:500">${s.title || ''}</div>
+          <div style="font-size:13px;color:#64748b">${s.original_artist || ''}${dur}</div>
+        </li>`;
+      });
+      html += '</ul></div>';
+    });
+    
+    $body.innerHTML = html;
+  }
+
+  function openPackagesModal(singer) {
+    if (!singer || !Array.isArray(singer.pricing_packages)) return;
+    const $modal = document.getElementById('packagesModal');
+    const $body = document.getElementById('packagesBody');
+    
+    const active = singer.pricing_packages.filter(p => p.is_active !== false);
+    if (!active.length) {
+      $body.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px">Пакеты не указаны</p>';
+    } else {
+      let html = '<div style="display:grid;gap:16px">';
+      active.forEach(pkg => {
+        html += `<div style="border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-weight:600;font-size:16px;margin-bottom:4px">${pkg.title || ''}</div>
+          <div style="font-size:20px;font-weight:700;color:#2563eb;margin-bottom:8px">
+            ${fmt(pkg.price)} ${pkg.currency || 'AZN'}
+          </div>
+          ${pkg.duration_min ? `<div style="font-size:14px;color:#64748b;margin-bottom:8px">⏱ ${pkg.duration_min} минут</div>` : ''}
+          ${pkg.description ? `<div style="font-size:14px;color:#475569">${pkg.description}</div>` : ''}
+        </div>`;
+      });
+      html += '</div>';
+      $body.innerHTML = html;
+    }
+    
+    $modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closePackagesModal() {
+    const $modal = document.getElementById('packagesModal');
+    $modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
+  function openContactsModal(singer) {
+    if (!singer) return;
+    const $modal = document.getElementById('contactsModal');
+    const $body = document.getElementById('contactsBody');
+    
+    let html = '<div style="display:grid;gap:12px">';
+    
+    if (Array.isArray(singer.phones) && singer.phones.length) {
+      html += '<div><div style="font-weight:600;margin-bottom:6px">📞 Телефоны:</div><ul style="list-style:none;padding:0;margin:0">';
+      singer.phones.forEach(ph => {
+        html += `<li style="padding:4px 0"><a href="tel:${ph}" style="color:#2563eb">${ph}</a></li>`;
+      });
+      html += '</ul></div>';
+    }
+    
+    if (singer.contact_public && typeof singer.contact_public === 'object') {
+      html += '<div><div style="font-weight:600;margin-bottom:6px">🌐 Соцсети:</div><ul style="list-style:none;padding:0;margin:0">';
+      Object.entries(singer.contact_public).forEach(([key, val]) => {
+        if (val) {
+          html += `<li style="padding:4px 0"><a href="${val}" target="_blank" rel="noopener noreferrer" style="color:#2563eb">${key}: ${val}</a></li>`;
+        }
+      });
+      html += '</ul></div>';
+    }
+    
+    html += '</div>';
+    $body.innerHTML = html;
+    
+    $modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeContactsModal() {
+    const $modal = document.getElementById('contactsModal');
+    $modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
+  // Bind modal events
+  window.closeRepertoireModal = closeRepertoireModal;
+  window.closePackagesModal = closePackagesModal;
+  window.closeContactsModal = closeContactsModal;
 
   // ждём DOM — тут мы берём все элементы и вешаем обработчики
   window.addEventListener('DOMContentLoaded', async () => {
@@ -351,12 +621,21 @@
     const $waBtn     = document.getElementById('waBtn');
     const $tgBtn     = document.getElementById('tgBtn');
     const $toast     = document.getElementById('toast');
+    const $pageTitle = document.getElementById('pageTitle');
+    const $filtersContainer = document.getElementById('filters');
 
-    // фильтры
+    // каталог табы
+    const $catalogTabs = document.getElementById('catalogTabs');
+    
+    // фильтры (будут переинициализироваться при смене каталога)
     $fSearch   = document.getElementById('fSearch');
     $fDistrict = document.getElementById('fDistrict');
     $fCap      = document.getElementById('fCap');
     $fPrice    = document.getElementById('fPrice');
+    $fGender   = document.getElementById('fGender');
+    $fGenres   = document.getElementById('fGenres');
+    $fLanguages= document.getElementById('fLanguages');
+    $fCity     = document.getElementById('fCity');
 
     // Галерея (элементы уже есть внизу body)
     const $g      = document.getElementById('gallery');
@@ -434,6 +713,48 @@
       touchStartX = null;
     }, {passive:true});
 
+    // ---- репертуар фильтры
+    document.getElementById('repSearch')?.addEventListener('input', debounce(renderRepertoire, 200));
+    document.getElementById('repLangFilter')?.addEventListener('change', renderRepertoire);
+
+    // ---- Catalog Tabs
+    function switchCatalog(catalog) {
+      if (!CATALOG_CONFIG[catalog]) return;
+      activeCatalog = catalog;
+      
+      // Update tab styles
+      document.querySelectorAll('.catalog-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.catalog === catalog);
+      });
+      
+      // Update title
+      $pageTitle.textContent = CATALOG_CONFIG[catalog].title;
+      
+      // Reset selection mode
+      pickMode = false;
+      $modeToggle.checked = false;
+      selected.clear();
+      $selCount.textContent = 'Выбрано: 0';
+      $genBtn.disabled = true;
+      $shareBox.style.display = 'none';
+      lastGeneratedUrl = '';
+      
+      // Rebuild filters
+      buildFilters(catalog);
+      
+      // Update URL
+      const params = new URLSearchParams(location.search);
+      params.set('catalog', catalog);
+      history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+      
+      // Reload data
+      loadCatalogData(catalog);
+    }
+    
+    $catalogTabs?.querySelectorAll('.catalog-tab').forEach(tab => {
+      tab.addEventListener('click', () => switchCatalog(tab.dataset.catalog));
+    });
+
     // ---- тост + копирование
     function showToast(text='Скопировано') {
       if (!$toast) return;
@@ -470,6 +791,46 @@
     });
 
     // ---- фильтры
+    function buildFilters(catalog) {
+      const config = CATALOG_CONFIG[catalog];
+      if (!config || !$filtersContainer) return;
+      
+      // Update grid layout
+      $filtersContainer.style.gridTemplateColumns = config.filterLayout;
+      
+      // Build filter inputs
+      let html = '';
+      Object.values(config.filters).forEach(f => {
+        if (f.type === 'text') {
+          html += `<input id="${f.id}" type="text" placeholder="${f.placeholder}" class="inp">`;
+        } else if (f.type === 'select') {
+          html += `<select id="${f.id}" class="inp">`;
+          if (f.options) {
+            html += f.options.map(opt => `<option value="${opt === 'Все' ? '' : opt}">${opt}</option>`).join('');
+          } else {
+            html += `<option value="">${f.placeholder}</option>`;
+          }
+          html += `</select>`;
+        }
+      });
+      
+      $filtersContainer.innerHTML = html;
+      
+      // Re-bind refs
+      $fSearch   = document.getElementById('fSearch');
+      $fDistrict = document.getElementById('fDistrict');
+      $fCap      = document.getElementById('fCap');
+      $fPrice    = document.getElementById('fPrice');
+      $fGender   = document.getElementById('fGender');
+      $fGenres   = document.getElementById('fGenres');
+      $fLanguages= document.getElementById('fLanguages');
+      $fCity     = document.getElementById('fCity');
+      
+      // Re-bind events
+      filtersBound = false;
+      bindFilterEventsOnce();
+    }
+    
     function parseRange(text){
       if(!text) return [null,null];
       const m = (text.replace(/\s/g,'').match(/^(\d+)?-?(\d+)?$/) || []);
@@ -481,6 +842,30 @@
       $fDistrict.innerHTML =
         '<option value="">Все районы</option>' +
         districts.map(d=>`<option value="${d}">${d}</option>`).join('');
+    }
+    
+    function populateCities(list) {
+      if (!$fCity) return;
+      const cities = Array.from(new Set(list.map(s => s.city).filter(Boolean))).sort();
+      $fCity.innerHTML =
+        '<option value="">Все города</option>' +
+        cities.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+    
+    function populateGenres(list) {
+      if (!$fGenres) return;
+      const genres = Array.from(new Set(list.flatMap(s => s.genres || []))).sort();
+      $fGenres.innerHTML =
+        '<option value="">Все жанры</option>' +
+        genres.map(g => `<option value="${g}">${g}</option>`).join('');
+    }
+    
+    function populateLanguages(list) {
+      if (!$fLanguages) return;
+      const langs = Array.from(new Set(list.flatMap(s => s.languages || []))).sort();
+      $fLanguages.innerHTML =
+        '<option value="">Все языки</option>' +
+        langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
     }
     function ensureDistrictValid(){
       if (!$fDistrict) return;
@@ -504,54 +889,308 @@
       if(filtersBound || !$fSearch) return;
       filtersBound = true;
       $fSearch.addEventListener('input', debounce(applyFilters,200));
-      [$fDistrict,$fCap,$fPrice].forEach(el=> el.addEventListener('input', applyFilters));
+      const allFilters = [$fDistrict,$fCap,$fPrice,$fGender,$fGenres,$fLanguages,$fCity].filter(Boolean);
+      allFilters.forEach(el=> el.addEventListener('input', applyFilters));
     }
     function applyFilters(){
       if(!$fSearch) return;
     
       const q = ($fSearch.value||'').trim().toLowerCase();
-      const dist = ($fDistrict?.value || '').trim();
-      const [capLo, capHi]     = parseRange(($fCap?.value||'').trim());
-      const [priceLo, priceHi] = parseRange(($fPrice?.value||'').trim());
-    
-      _viewVenues = _allVenues.filter(v=>{
-        // поиск
-        if(q){
-          const hay = [v.name,v.city,v.district,(v.tags||[]).join(' '),v.description]
-                      .filter(Boolean).join(' ').toLowerCase();
-          if(!hay.includes(q)) return false;
-        }
-    
-        // район
-        if(dist && v.district !== dist) return false;
-    
-        // вместимость
-        const {min: cMin, max: cMax} = getVenueCapacityMinMax(v);
-        if(!capacityMatches(cMin, cMax, capLo, capHi)) return false;
-    
-        // цена/гость
-        const {min: pMin, max: pMax} = getVenuePriceMinMax(v);
-        if(!priceMatches(pMin, pMax, priceLo, priceHi)) return false;
-    
-        return true;
-      });
+      
+      if (activeCatalog === 'venues') {
+        const dist = ($fDistrict?.value || '').trim();
+        const [capLo, capHi]     = parseRange(($fCap?.value||'').trim());
+        const [priceLo, priceHi] = parseRange(($fPrice?.value||'').trim());
+      
+        _viewVenues = _allVenues.filter(v=>{
+          // поиск
+          if(q){
+            const hay = [v.name,v.city,v.district,(v.tags||[]).join(' '),v.description]
+                        .filter(Boolean).join(' ').toLowerCase();
+            if(!hay.includes(q)) return false;
+          }
+      
+          // район
+          if(dist && v.district !== dist) return false;
+      
+          // вместимость
+          const {min: cMin, max: cMax} = getVenueCapacityMinMax(v);
+          if(!capacityMatches(cMin, cMax, capLo, capHi)) return false;
+      
+          // цена/гость
+          const {min: pMin, max: pMax} = getVenuePriceMinMax(v);
+          if(!priceMatches(pMin, pMax, priceLo, priceHi)) return false;
+      
+          return true;
+        });
+        
+        // синхронизация в URL
+        const params = new URLSearchParams(location.search);
+        q ? params.set('q', q) : params.delete('q');
+        dist ? params.set('d', dist) : params.delete('d');
+        $fCap?.value   ? params.set('cap', ($fCap.value||'').trim())     : params.delete('cap');
+        $fPrice?.value ? params.set('price', ($fPrice.value||'').trim()) : params.delete('price');
+        const newUrl = `${location.pathname}?${params.toString()}`;
+        history.replaceState(null,'',newUrl);
+        
+      } else if (activeCatalog === 'singers') {
+        const [priceLo, priceHi] = parseRange(($fPrice?.value||'').trim());
+        const gender = ($fGender?.value || '').trim();
+        const genre = ($fGenres?.value || '').trim();
+        const lang = ($fLanguages?.value || '').trim();
+        const city = ($fCity?.value || '').trim();
+        
+        _viewVenues = _allVenues.filter(s => {
+          // поиск
+          if (q) {
+            const hay = [s.name, (s.aliases||[]).join(' '), (s.tags||[]).join(' '), (s.genres||[]).join(' ')]
+              .filter(Boolean).join(' ').toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          
+          // пол
+          if (gender && s.gender !== gender) return false;
+          
+          // жанр
+          if (genre && (!Array.isArray(s.genres) || !s.genres.includes(genre))) return false;
+          
+          // язык
+          if (lang && (!Array.isArray(s.languages) || !s.languages.includes(lang))) return false;
+          
+          // город
+          if (city && s.city !== city) return false;
+          
+          // цена
+          const {min: pMin, max: pMax} = getSingerPrice(s);
+          if (!priceMatches(pMin, pMax, priceLo, priceHi)) return false;
+          
+          return true;
+        });
+        
+        // синхронизация в URL
+        const params = new URLSearchParams(location.search);
+        q ? params.set('q', q) : params.delete('q');
+        $fPrice?.value ? params.set('price', ($fPrice.value||'').trim()) : params.delete('price');
+        gender ? params.set('gender', gender) : params.delete('gender');
+        genre ? params.set('genre', genre) : params.delete('genre');
+        lang ? params.set('lang', lang) : params.delete('lang');
+        city ? params.set('city', city) : params.delete('city');
+        const newUrl = `${location.pathname}?${params.toString()}`;
+        history.replaceState(null,'',newUrl);
+      }
     
       render(_viewVenues, window.__lastMeta);
-    
-      // синхронизация в URL
-      const params = new URLSearchParams(location.search);
-      q ? params.set('q', q) : params.delete('q');
-      dist ? params.set('d', dist) : params.delete('d');
-      $fCap.value   ? params.set('cap', ($fCap.value||'').trim())     : params.delete('cap');
-      $fPrice.value ? params.set('price', ($fPrice.value||'').trim()) : params.delete('price');
-      const newUrl = `${location.pathname}?${params.toString()}`;
-      history.replaceState(null,'',newUrl);
     }
 
 
+    // ---- RENDER CARDS HELPERS ===
+    function renderVenueCard(v) {
+      // обложка
+      let coverUrl = Array.isArray(v.media?.photos) && v.media.photos.length ? v.media.photos[0] : null;
+      const mediaArr = normalizeMedia(v.media);
+      if (!coverUrl && mediaArr.length) coverUrl = mediaArr[0]?.url || null;
+
+      // SVG иконки (16x16)
+      const svgPin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M12 22s7-5.33 7-12a7 7 0 10-14 0c0 6.67 7 12 7 12z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/>
+      </svg>`;
+      const svgMoney = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M3 7h18v10H3z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        <path d="M7 12h10M12 9v6" stroke="currentColor" stroke-width="1.7" />
+      </svg>`;
+      const svgUsers = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M2 19a7 7 0 0114 0" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M17 11a2 2 0 100-4" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M20.5 19a5.5 5.5 0 00-5.5-4" stroke="currentColor" stroke-width="1.7"/>
+      </svg>`;
+      
+      const rawPriceMin = v.price_min ?? v.priceMin ?? v.min_price ?? v.pricing_min ?? (v.price && v.price.min);
+      const rawPriceMax = v.price_max ?? v.priceMax ?? v.max_price ?? v.pricing_max ?? (v.price && v.price.max);
+      
+      let pMinNum = toNum(rawPriceMin);
+      let pMaxNum = toNum(rawPriceMax);
+      
+      if (Number.isNaN(pMinNum) && Number.isNaN(pMaxNum)) {
+        const fromMenu = getPriceRangeFromMenu(v.menu);
+        pMinNum = fromMenu.min;
+        pMaxNum = fromMenu.max;
+      }
+      
+      const hasPMin = !Number.isNaN(pMinNum);
+      const hasPMax = !Number.isNaN(pMaxNum);
+      const hasPriceAny = hasPMin || hasPMax;
+      
+      const currency = v.currency || 'AZN';
+      const priceText = hasPriceAny
+      ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
+         : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
+         : `до ${fmt(pMaxNum)} ${currency}`)
+      : '';
+      
+      const cMinNum = Number(v.capacity_min), cMaxNum = Number(v.capacity_max);
+      const hasCMin = !Number.isNaN(cMinNum), hasCMax = !Number.isNaN(cMaxNum);
+      const hasCapAny = hasCMin || hasCMax;
+      const capText = hasCapAny
+        ? (hasCMin && hasCMax ? `${fmt(cMinNum)}–${fmt(cMaxNum)}`
+           : hasCMin ? `от ${fmt(cMinNum)}`
+           : `до ${fmt(cMaxNum)}`)
+        : '';
+      
+      const mapHref = v.location_url || ((v.location_lat!=null && v.location_lng!=null)
+        ? `https://maps.google.com/?q=${v.location_lat},${v.location_lng}` : '');
+      
+      return `
+        ${coverUrl ? `<img class="img venue-cover" src="${coverUrl}" alt="${v.name||''}" loading="lazy">` : `<div class="img venue-cover"></div>`}
+        <div class="body">
+          <div class="row">
+            <div>
+              <div style="font-weight:600;font-size:18px">${v.name||''}</div>
+              <div class="loc" style="display:flex;align-items:center;gap:6px;color:#64748b;">
+                <span class="ico" style="display:inline-flex;line-height:0;">${svgPin}</span>
+                <span>${[v.city, v.district].filter(Boolean).join(', ')}</span>
+              </div>
+            </div>
+            <div style="text-align:right;font-size:14px;color:#475569">
+              ${hasPriceAny ? `<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;">
+                  <span class="ico" style="display:inline-flex;line-height:0;">${svgMoney}</span>
+                  <span>${priceText}</span>
+                </div>` : ''}
+              ${hasCapAny ? `<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:2px;">
+                  <span class="ico" style="display:inline-flex;line-height:0;">${svgUsers}</span>
+                  <span>${capText}</span>
+                </div>` : ''}
+            </div>
+          </div>
+      
+          <div class="btns">
+            ${mediaArr.length ? `<button class="btn venue-media">Медиа</button>` : ''}
+            ${mapHref ? `<button class="btn venue-map" data-href="${mapHref}">Карта</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSingerCard(s) {
+      const coverUrl = (Array.isArray(s.media?.photos) && s.media.photos.length) ? s.media.photos[0] : null;
+      
+      const svgPin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M12 22s7-5.33 7-12a7 7 0 10-14 0c0 6.67 7 12 7 12z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/>
+      </svg>`;
+      const svgMoney = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M3 7h18v10H3z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        <path d="M7 12h10M12 9v6" stroke="currentColor" stroke-width="1.7" />
+      </svg>`;
+      const svgMic = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <rect x="9" y="2" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8" stroke="currentColor" stroke-width="1.7"/>
+      </svg>`;
+      const svgGlobe = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20" stroke="currentColor" stroke-width="1.7"/>
+      </svg>`;
+      
+      const {min: pMin, max: pMax} = getSingerPrice(s);
+      const hasPMin = !Number.isNaN(pMin);
+      const hasPMax = !Number.isNaN(pMax);
+      const hasPriceAny = hasPMin || hasPMax;
+      const currency = s.pricing_packages?.[0]?.currency || 'AZN';
+      const priceText = hasPriceAny
+        ? (hasPMin && hasPMax ? `${fmt(pMin)}–${fmt(pMax)} ${currency}`
+           : hasPMin ? `от ${fmt(pMin)} ${currency}`
+           : `до ${fmt(pMax)} ${currency}`)
+        : '';
+      
+      const genderLabel = getGenderLabel(s.gender);
+      const genresText = Array.isArray(s.genres) && s.genres.length ? s.genres.slice(0, 3).join(', ') : '';
+      const langsText = Array.isArray(s.languages) && s.languages.length ? s.languages.map(l => l.toUpperCase()).join(', ') : '';
+      const regionsText = Array.isArray(s.regions_covered) && s.regions_covered.length ? s.regions_covered.slice(0, 3).join(', ') : '';
+      const repCount = Array.isArray(s.repertoire) ? s.repertoire.length : 0;
+      
+      return `
+        ${coverUrl ? `<img class="img singer-cover" src="${coverUrl}" alt="${s.name||''}" loading="lazy">` : `<div class="img singer-cover"></div>`}
+        <div class="body">
+          <div style="margin-bottom:8px">
+            <div style="font-weight:600;font-size:18px">${s.name||''}</div>
+            ${s.aliases?.length ? `<div style="font-size:13px;color:#9ca3af">${s.aliases.join(', ')}</div>` : ''}
+          </div>
+          
+          <div style="font-size:14px;color:#64748b;display:grid;gap:4px;margin-bottom:10px">
+            ${s.city ? `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-flex;line-height:0;">${svgPin}</span>
+              <span>${s.city}${regionsText ? ' • ' + regionsText : ''}</span>
+            </div>` : ''}
+            ${genresText ? `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-flex;line-height:0;">${svgMic}</span>
+              <span>${genresText}</span>
+            </div>` : ''}
+            ${langsText ? `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-flex;line-height:0;">${svgGlobe}</span>
+              <span>${langsText}</span>
+            </div>` : ''}
+          </div>
+          
+          ${hasPriceAny ? `<div style="display:flex;align-items:center;gap:6px;font-size:18px;font-weight:700;color:#2563eb;margin-bottom:10px">
+            <span style="display:inline-flex;line-height:0;">${svgMoney}</span>
+            <span>${priceText}</span>
+          </div>` : ''}
+          
+          <div class="btns">
+            ${(s.media?.photos?.length || s.media?.videos?.length) ? `<button class="btn singer-media">Медиа</button>` : ''}
+            ${repCount > 0 ? `<button class="btn singer-repertoire">Репертуар (${repCount})</button>` : ''}
+            ${s.pricing_packages?.length ? `<button class="btn singer-packages">Пакеты</button>` : ''}
+            ${(s.phones?.length || s.contact_public) ? `<button class="btn singer-contacts">Контакты</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function bindVenueCardActions(card, v) {
+      const mediaArr = normalizeMedia(v.media);
+      const allPhotoUrls = Array.isArray(v.media?.photos) ? v.media.photos.filter(Boolean) : [];
+      const fallbackUrls = mediaArr.map(m => m?.url).filter(Boolean);
+      const allMediaUrls = Array.from(new Set([...allPhotoUrls, ...fallbackUrls]));
+      
+      const mediaBtn = card.querySelector('.venue-media');
+      mediaBtn?.addEventListener('click', () => openGallery(allMediaUrls, 0));
+      
+      const mapBtn = card.querySelector('.venue-map');
+      mapBtn?.addEventListener('click', () => {
+        const href = mapBtn.dataset.href;
+        if (href) window.open(href, '_blank', 'noopener,noreferrer');
+      });
+      
+      const coverEl = card.querySelector('.venue-cover');
+      coverEl?.addEventListener('click', () => {
+        if (pickMode) return;
+        if (allMediaUrls.length) openGallery(allMediaUrls, 0);
+      });
+      coverEl && (coverEl.style.cursor = pickMode ? 'pointer' : (allMediaUrls.length ? 'zoom-in' : 'default'));
+    }
+
+    function bindSingerCardActions(card, s) {
+      const allPhotoUrls = Array.isArray(s.media?.photos) ? s.media.photos.filter(Boolean) : [];
+      const allVideoUrls = Array.isArray(s.media?.videos) ? s.media.videos.filter(Boolean) : [];
+      const allMediaUrls = [...allPhotoUrls, ...allVideoUrls];
+      
+      card.querySelector('.singer-media')?.addEventListener('click', () => openGallery(allPhotoUrls, 0));
+      card.querySelector('.singer-repertoire')?.addEventListener('click', () => openRepertoireModal(s));
+      card.querySelector('.singer-packages')?.addEventListener('click', () => openPackagesModal(s));
+      card.querySelector('.singer-contacts')?.addEventListener('click', () => openContactsModal(s));
+      
+      const coverEl = card.querySelector('.singer-cover');
+      coverEl?.addEventListener('click', () => {
+        if (pickMode) return;
+        if (allPhotoUrls.length) openGallery(allPhotoUrls, 0);
+      });
+      coverEl && (coverEl.style.cursor = pickMode ? 'pointer' : (allPhotoUrls.length ? 'zoom-in' : 'default'));
+    }
+
     // ---- РЕНДЕР карточек
-    function render(venues, meta){
-      window.__lastVenues = venues;
+    function render(items, meta){
+      window.__lastVenues = items;
       window.__lastMeta   = meta || null;
 
       $grid.innerHTML = '';
@@ -562,125 +1201,32 @@
         note.textContent = `${meta?.note ? 'Комментарий: '+meta.note+'. ' : ''}${meta?.expires_at ? 'Действует до '+new Date(meta.expires_at).toLocaleString() : ''}`;
         $status.appendChild(note);
       }
-      if (!venues.length) { $empty.style.display='block'; return; }
+      if (!items.length) { $empty.style.display='block'; return; }
       $empty.style.display='none';
 
-      for (const v of venues) {
-        // обложка
-        let coverUrl = Array.isArray(v.media?.photos) && v.media.photos.length ? v.media.photos[0] : null;
-        const mediaArr = normalizeMedia(v.media);
-        if (!coverUrl && mediaArr.length) coverUrl = mediaArr[0]?.url || null;
-
-        const allPhotoUrls = Array.isArray(v.media?.photos) ? v.media.photos.filter(Boolean) : [];
-        const fallbackUrls = mediaArr.map(m => m?.url).filter(Boolean);
-        const allMediaUrls = Array.from(new Set([...allPhotoUrls, ...fallbackUrls]));
-
-        // SVG иконки (16x16)
-        const svgPin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M12 22s7-5.33 7-12a7 7 0 10-14 0c0 6.67 7 12 7 12z" stroke="currentColor" stroke-width="1.7" fill="none"/>
-          <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/>
-        </svg>`;
-        const svgMoney = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M3 7h18v10H3z" stroke="currentColor" stroke-width="1.7" fill="none"/>
-          <path d="M7 12h10M12 9v6" stroke="currentColor" stroke-width="1.7" />
-        </svg>`;
-        const svgUsers = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.7"/>
-          <path d="M2 19a7 7 0 0114 0" stroke="currentColor" stroke-width="1.7"/>
-          <path d="M17 11a2 2 0 100-4" stroke="currentColor" stroke-width="1.7"/>
-          <path d="M20.5 19a5.5 5.5 0 00-5.5-4" stroke="currentColor" stroke-width="1.7"/>
-        </svg>`;
+      for (const item of items) {
+        let cardHtml = '';
         
-        // ----- перед шаблоном аккуратно посчитаем, что реально есть -----
-        // 1) сначала ищем «прямые» поля (если когда-нибудь появятся)
-        const rawPriceMin =
-          v.price_min ?? v.priceMin ?? v.min_price ?? v.pricing_min ??
-          (v.price && v.price.min);
-        const rawPriceMax =
-          v.price_max ?? v.priceMax ?? v.max_price ?? v.pricing_max ??
-          (v.price && v.price.max);
-        
-        // 2) пробуем их распарсить
-        let pMinNum = toNum(rawPriceMin);
-        let pMaxNum = toNum(rawPriceMax);
-        
-        // 3) если их нет – берём из меню (price_azn)
-        if (Number.isNaN(pMinNum) && Number.isNaN(pMaxNum)) {
-          const fromMenu = getPriceRangeFromMenu(v.menu);
-          pMinNum = fromMenu.min;
-          pMaxNum = fromMenu.max;
+        if (activeCatalog === 'venues') {
+          cardHtml = renderVenueCard(item);
+        } else if (activeCatalog === 'singers') {
+          cardHtml = renderSingerCard(item);
         }
         
-        const hasPMin = !Number.isNaN(pMinNum);
-        const hasPMax = !Number.isNaN(pMaxNum);
-        const hasPriceAny = hasPMin || hasPMax;
-        
-        const currency = v.currency || 'AZN';
-        const priceText = hasPriceAny
-        ? (hasPMin && hasPMax ? `${fmt(pMinNum)}–${fmt(pMaxNum)} ${currency}`
-           : hasPMin ? `от ${fmt(pMinNum)} ${currency}`
-           : `до ${fmt(pMaxNum)} ${currency}`)
-        : '';
-        
-        const cMinNum = Number(v.capacity_min), cMaxNum = Number(v.capacity_max);
-        const hasCMin = !Number.isNaN(cMinNum), hasCMax = !Number.isNaN(cMaxNum);
-        const hasCapAny = hasCMin || hasCMax;
-        const capText = hasCapAny
-          ? (hasCMin && hasCMax ? `${fmt(cMinNum)}–${fmt(cMaxNum)}`
-             : hasCMin ? `от ${fmt(cMinNum)}`
-             : `до ${fmt(cMaxNum)}`)
-          : '';
-        
-        // URL для карты: приоритет — явный location_url, иначе строим по координатам
-        const mapHref =
-          v.location_url
-          || ((v.location_lat!=null && v.location_lng!=null)
-              ? `https://maps.google.com/?q=${v.location_lat},${v.location_lng}`
-              : '');
-        
-        // ----- шаблон карточки (без описания и без контактов) -----
         const card = document.createElement('div');
         card.className = 'card';
-        card.innerHTML = `
-          ${coverUrl ? `<img class="img" src="${coverUrl}" alt="${v.name||''}" loading="lazy">` : `<div class="img"></div>`}
-          <div class="body">
-            <div class="row">
-              <div>
-                <div style="font-weight:600;font-size:18px">${v.name||''}</div>
-                <div class="loc" style="display:flex;align-items:center;gap:6px;color:#64748b;">
-                  <span class="ico" style="display:inline-flex;line-height:0;">${svgPin}</span>
-                  <span>${[v.city, v.district].filter(Boolean).join(', ')}</span>
-                </div>
-              </div>
-              <div style="text-align:right;font-size:14px;color:#475569">
-                ${hasPriceAny ? `<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;">
-                    <span class="ico" style="display:inline-flex;line-height:0;">${svgMoney}</span>
-                    <span>${priceText}</span>
-                  </div>` : ''}
-                ${hasCapAny ? `<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:2px;">
-                    <span class="ico" style="display:inline-flex;line-height:0;">${svgUsers}</span>
-                    <span>${capText}</span>
-                  </div>` : ''}
-              </div>
-            </div>
-        
-            <div class="btns">
-              ${allMediaUrls.length ? `<button class="btn" data-action="media">Медиа</button>` : ''}
-              ${mapHref ? `<button class="btn" data-action="map" data-href="${mapHref}">Карта</button>` : ''}
-            </div>
-          </div>
-        `;
-        
+        card.innerHTML = cardHtml;
+
         // выбор
         if (pickMode) {
           const dot = document.createElement('div');
           dot.className = 'select-dot';
-          dot.textContent = selected.has(v.id) ? '✓' : '';
+          dot.textContent = selected.has(item.id) ? '✓' : '';
           dot.addEventListener('click', (e)=>{
             e.stopPropagation();
-            if (selected.has(v.id)) selected.delete(v.id); else selected.add(v.id);
-            dot.textContent = selected.has(v.id) ? '✓' : '';
-            card.classList.toggle('sel', selected.has(v.id));
+            if (selected.has(item.id)) selected.delete(item.id); else selected.add(item.id);
+            dot.textContent = selected.has(item.id) ? '✓' : '';
+            card.classList.toggle('sel', selected.has(item.id));
             $selCount.textContent = 'Выбрано: ' + selected.size;
             $genBtn.disabled = selected.size === 0;
           });
@@ -693,89 +1239,98 @@
           $grid.appendChild(card);
         }
 
-        // кнопка Медиа
-        const mediaBtn = card.querySelector('[data-action="media"]');
-        mediaBtn?.addEventListener('click', () => openGallery(allMediaUrls, 0));
-
-        // кнопка Карта
-        const mapBtn = card.querySelector('[data-action="map"]');
-        mapBtn?.addEventListener('click', () => {
-          const href = mapBtn.dataset.href;
-          if (href) window.open(href, '_blank', 'noopener,noreferrer');
-        });
-        
-        // клик по обложке
-        const coverEl = card.querySelector('.img');
-        coverEl?.addEventListener('click', () => {
-          if (pickMode) return;
-          if (allMediaUrls.length) openGallery(allMediaUrls, 0);
-        });
-        coverEl && (coverEl.style.cursor = pickMode ? 'pointer' : (allMediaUrls.length ? 'zoom-in' : 'default'));
+        // Bind card actions
+        if (activeCatalog === 'venues') {
+          bindVenueCardActions(card, item);
+        } else if (activeCatalog === 'singers') {
+          bindSingerCardActions(card, item);
+        }
 
         // подсветка выбранных
-        card.classList.toggle('sel', selected.has(v.id));
+        card.classList.toggle('sel', selected.has(item.id));
       }
     }
 
     // ---- ЗАГРУЗКА ДАННЫХ
-    async function loadAllVenues() {
+    async function loadCatalogData(catalog) {
+      const config = CATALOG_CONFIG[catalog];
+      if (!config) return;
+      
       $status.textContent = 'Загрузка данных из Firebase…';
-      const snap = await getDocs(collection(db, COL.venues));
-      const venues = [];
-      snap.forEach(d => venues.push({ id: d.id, ...d.data() }));
+      const snap = await getDocs(collection(db, COL[config.collection]));
+      const items = [];
+      snap.forEach(d => {
+        const data = d.data();
+        // Для певцов фильтруем только published
+        if (catalog === 'singers' && data.status !== 'published') return;
+        items.push({ id: d.id, ...data });
+      });
       $status.textContent = '';
 
-      _allVenues = venues.slice();
-      populateDistricts(_allVenues);
+      _allVenues = items.slice();
+      
+      // Populate dynamic filters
+      if (catalog === 'venues') {
+        populateDistricts(_allVenues);
+      } else if (catalog === 'singers') {
+        populateCities(_allVenues);
+        populateGenres(_allVenues);
+        populateLanguages(_allVenues);
+      }
+      
       restoreFiltersFromURL();
-      ensureDistrictValid();  // привести селект к валидному значению
-      
-      // если параметров нет в URL — очищаем дефолтные значения
-      const ps = new URLSearchParams(location.search);
-      if (!ps.has('q'))     $fSearch.value   = '';
-      if (!ps.has('d'))     { $fDistrict.value=''; $fDistrict.selectedIndex = 0; }
-      if (!ps.has('cap'))   $fCap.value      = '';
-      if (!ps.has('price')) $fPrice.value    = '';
-      
       bindFilterEventsOnce();
-      applyFilters();                         // только через фильтры
+      applyFilters();
     }
 
-    async function loadShortlist(slug, token) {
+    async function loadShortlist(catalog, slug, token) {
+      const config = CATALOG_CONFIG[catalog];
+      if (!config) return;
+      
       $status.textContent = 'Загрузка персонального шортлиста…';
-      const sDoc = await getDoc(doc(db, COL.shortlists, slug));
+      const sDoc = await getDoc(doc(db, COL[config.shortlistCollection], slug));
       if (!sDoc.exists()) { $status.textContent = 'Шортлист не найден'; return; }
       const sData = sDoc.data();
+      
+      // Check token
       if (sData.token && sData.token !== token) { $status.textContent = 'Неверный токен'; return; }
       if (sData.token_hash) {
         const h = await sha256Hex(token || '');
         if (h !== sData.token_hash) { $status.textContent = 'Неверный токен'; return; }
       }
+      
+      // Check expiration
       const exp = sData.expires_at?.toDate ? sData.expires_at.toDate() : (sData.expires_at ? new Date(sData.expires_at) : null);
       if (exp && exp < new Date()) { $status.textContent = 'Ссылка истекла'; return; }
 
-      const ids = Array.isArray(sData.venue_ids) ? sData.venue_ids : [];
-      const venues = [];
+      // Load items by IDs
+      const ids = catalog === 'singers' ? (sData.singer_ids || []) : (sData.venue_ids || []);
+      const items = [];
       for (const id of ids) {
-        const v = await getDoc(doc(db, COL.venues, id));
-        if (v.exists()) venues.push({ id: v.id, ...v.data() });
+        const itemDoc = await getDoc(doc(db, COL[config.collection], id));
+        if (itemDoc.exists()) {
+          const data = itemDoc.data();
+          // Для певцов проверяем status
+          if (catalog === 'singers' && data.status !== 'published') continue;
+          items.push({ id: itemDoc.id, ...data });
+        }
       }
       $status.textContent = '';
 
-      _allVenues = venues.slice();                 // источник = подмножество шортлиста
-      populateDistricts(_allVenues);               // районы только из шортлиста
+      _allVenues = items.slice();
+      
+      // Populate dynamic filters
+      if (catalog === 'venues') {
+        populateDistricts(_allVenues);
+      } else if (catalog === 'singers') {
+        populateCities(_allVenues);
+        populateGenres(_allVenues);
+        populateLanguages(_allVenues);
+      }
+      
       restoreFiltersFromURL();
-      ensureDistrictValid();  // привести селект к валидному значению
-      
-      // если параметров нет в URL — очищаем дефолтные значения
-      const ps = new URLSearchParams(location.search);
-      if (!ps.has('q'))     $fSearch.value   = '';
-      if (!ps.has('d'))     { $fDistrict.value=''; $fDistrict.selectedIndex = 0; }
-      if (!ps.has('cap'))   $fCap.value      = '';
-      if (!ps.has('price')) $fPrice.value    = '';
-      
       bindFilterEventsOnce();
-      applyFilters();                               // только через фильтры
+      applyFilters();
     }
 
     // ---- Генерация ссылки (через модалку настроек)
@@ -806,18 +1361,28 @@
       const ids   = Array.from(selected);
       const token = Math.random().toString(36).slice(2,10);
       const note  = $cfgNote.value?.trim() || null;
+      
+      const config = CATALOG_CONFIG[activeCatalog];
+      const idField = activeCatalog === 'singers' ? 'singer_ids' : 'venue_ids';
 
       try {
-        await setDoc(doc(db, COL.shortlists, slug), {
-          venue_ids: ids,
+        const docData = {
+          [idField]: ids,
           token_hash: await sha256Hex(token),
           note,
           created_at: serverTimestamp(),
           expires_at: expiresAt
-        });
+        };
+        
+        await setDoc(doc(db, COL[config.shortlistCollection], slug), docData);
         closeCfg();
 
-        const url = `${location.origin}/?shortlist=${slug}&token=${token}`;
+        const params = new URLSearchParams();
+        params.set('catalog', activeCatalog);
+        params.set('shortlist', slug);
+        params.set('token', token);
+        const url = `${location.origin}/?${params.toString()}`;
+        
         lastGeneratedUrl = url;
         ($shareBox || {}).style.display = 'inline-flex';
         const enc = encodeURIComponent(url);
@@ -826,7 +1391,7 @@
 
         const copied = await copyToClipboard(url);
         if (copied) showToast('Скопировано'); else alert('Ссылка:\n' + url);
-        if (navigator.share) { try { await navigator.share({ title:'Подбор площадок', url }); } catch {} }
+        if (navigator.share) { try { await navigator.share({ title:'Подбор', url }); } catch {} }
       } catch (e) {
         console.error(e);
         alert('Не удалось создать ссылку: ' + (e?.message || e));
@@ -835,11 +1400,26 @@
 
     // ---- Старт — решаем, что грузить
     const qs = new URLSearchParams(location.search);
+    const catalogParam = qs.get('catalog') || 'venues';
     const shortlistSlug  = qs.get('shortlist');
     const shortlistToken = qs.get('token');
+    
+    // Set active catalog
+    activeCatalog = CATALOG_CONFIG[catalogParam] ? catalogParam : 'venues';
+    
+    // Initialize UI
+    document.querySelectorAll('.catalog-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.catalog === activeCatalog);
+    });
+    $pageTitle.textContent = CATALOG_CONFIG[activeCatalog].title;
+    buildFilters(activeCatalog);
+    
     try {
-      if (shortlistSlug && shortlistToken) await loadShortlist(shortlistSlug, shortlistToken);
-      else await loadAllVenues();
+      if (shortlistSlug && shortlistToken) {
+        await loadShortlist(activeCatalog, shortlistSlug, shortlistToken);
+      } else {
+        await loadCatalogData(activeCatalog);
+      }
     } catch (e) {
       console.error(e);
       $status.textContent = 'Ошибка загрузки: ' + (e?.message || e);
