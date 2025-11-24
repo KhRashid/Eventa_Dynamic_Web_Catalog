@@ -153,7 +153,7 @@
   </div>
 
   <!-- Repertoire Modal -->
-  <div id="repertoireModal" class="modal-backdrop">
+  <div id="repertoireModal" class="modal-backdrop" onclick="if(event.target===this) closeRepertoireModal()">
     <div class="modal-content">
       <div class="modal-header">
         <div class="modal-title">Репертуар</div>
@@ -170,7 +170,7 @@
   </div>
 
   <!-- Packages Modal -->
-  <div id="packagesModal" class="modal-backdrop">
+  <div id="packagesModal" class="modal-backdrop" onclick="if(event.target===this) closePackagesModal()">
     <div class="modal-content">
       <div class="modal-header">
         <div class="modal-title">Пакеты и тарифы</div>
@@ -1264,10 +1264,9 @@
           </div>` : ''}
           
           <div class="btns">
-            ${(s.media?.photos?.length || s.media?.videos?.length) ? `<button class="btn singer-media">Медиа</button>` : ''}
             ${repCount > 0 ? `<button class="btn singer-repertoire">Репертуар</button>` : ''}
-            ${(s._pricing_packages?.length) ? `<button class="btn singer-packages">Пакеты (${s._pricing_packages.length})</button>` : ''}
-            ${(s.phones?.length || s.contact_public) ? `<button class="btn singer-contacts">Контакты</button>` : ''}
+            ${(s._pricing_packages?.length) ? `<button class="btn singer-packages">Пакеты</button>` : ''}
+            ${(s.phones?.length || s.contact_public) ? `<button class="btn singer-contacts">Соцсети</button>` : ''}
           </div>
         </div>
       `;
@@ -1301,7 +1300,6 @@
       const allVideoUrls = Array.isArray(s.media?.videos) ? s.media.videos.filter(Boolean) : [];
       const allMediaUrls = [...allPhotoUrls, ...allVideoUrls];
       
-      card.querySelector('.singer-media')?.addEventListener('click', () => openGallery(allPhotoUrls, 0));
       card.querySelector('.singer-repertoire')?.addEventListener('click', () => openRepertoireModal(s));
       card.querySelector('.singer-packages')?.addEventListener('click', () => openPackagesModal(s));
       card.querySelector('.singer-contacts')?.addEventListener('click', () => openContactsModal(s));
