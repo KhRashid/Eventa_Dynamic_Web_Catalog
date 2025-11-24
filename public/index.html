@@ -739,7 +739,7 @@
       $shareBox.style.display = 'none';
       lastGeneratedUrl = '';
       
-      // Rebuild filters
+      // КРИТИЧНО: Rebuild filters ПЕРЕД загрузкой данных
       buildFilters(catalog);
       
       // Update URL
@@ -747,7 +747,7 @@
       params.set('catalog', catalog);
       history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
       
-      // Reload data
+      // Reload data (фильтры уже созданы)
       loadCatalogData(catalog);
     }
     
@@ -816,7 +816,7 @@
       
       $filtersContainer.innerHTML = html;
       
-      // Re-bind refs
+      // КРИТИЧНО: Re-bind refs СРАЗУ после создания элементов
       $fSearch   = document.getElementById('fSearch');
       $fDistrict = document.getElementById('fDistrict');
       $fCap      = document.getElementById('fCap');
@@ -826,9 +826,8 @@
       $fLanguages= document.getElementById('fLanguages');
       $fCity     = document.getElementById('fCity');
       
-      // Re-bind events
+      // Reset filtersBound flag to allow re-binding
       filtersBound = false;
-      bindFilterEventsOnce();
     }
     
     function parseRange(text){
@@ -878,12 +877,21 @@
       }
     }    
     function restoreFiltersFromURL(){
-      if(!$fSearch) return;
       const ps = new URLSearchParams(location.search);
-      $fSearch.value  = ps.get('q')    || '';
-      $fDistrict.value= ps.get('d')    || '';
-      $fCap.value     = ps.get('cap')  || '';
-      $fPrice.value   = ps.get('price')|| '';
+      if ($fSearch) $fSearch.value = ps.get('q') || '';
+      
+      // Для venues
+      if ($fDistrict) $fDistrict.value = ps.get('d') || '';
+      if ($fCap) $fCap.value = ps.get('cap') || '';
+      
+      // Для singers
+      if ($fGender) $fGender.value = ps.get('gender') || '';
+      if ($fGenres) $fGenres.value = ps.get('genre') || '';
+      if ($fLanguages) $fLanguages.value = ps.get('lang') || '';
+      if ($fCity) $fCity.value = ps.get('city') || '';
+      
+      // Цена общая
+      if ($fPrice) $fPrice.value = ps.get('price') || '';
     }
     function bindFilterEventsOnce(){
       if(filtersBound || !$fSearch) return;
@@ -1279,7 +1287,7 @@
       _allVenues = items.slice();
       _viewVenues = [];
       
-      // Populate dynamic filters
+      // Populate dynamic filters ПЕРЕД restoreFiltersFromURL
       if (catalog === 'venues') {
         populateDistricts(_allVenues);
       } else if (catalog === 'singers') {
@@ -1288,8 +1296,13 @@
         populateLanguages(_allVenues);
       }
       
+      // Restore filters from URL (теперь элементы уже существуют)
       restoreFiltersFromURL();
+      
+      // Bind events
       bindFilterEventsOnce();
+      
+      // Apply filters and render
       applyFilters();
     }
 
