@@ -21,7 +21,9 @@
       venues: "venues", 
       shortlists: "shortlists",
       singers: "singers",
-      singer_shortlists: "singer_shortlists"
+      singer_shortlists: "singer_shortlists",
+      cars: "car_providers",
+      car_shortlists: "car_shortlists"
     };
   </script>
 
@@ -100,6 +102,7 @@
     <div id="catalogTabs" style="display:flex;gap:8px;margin:12px 0 16px;border-bottom:2px solid var(--border);padding-bottom:0">
       <button class="catalog-tab active" data-catalog="venues">Площадки</button>
       <button class="catalog-tab" data-catalog="singers">Певцы</button>
+      <button class="catalog-tab" data-catalog="cars">Автомобили</button>
     </div>
 
       <div id="toolbar" style="display:flex;gap:10px;align-items:center;margin:10px 0 16px;flex-wrap:wrap">
@@ -270,13 +273,26 @@
         languages: { id: 'fLanguages', placeholder: 'Языки', type: 'select' },
         city: { id: 'fCity', placeholder: 'Все города', type: 'select' }
       }
+    },
+    cars: {
+      collection: 'car_providers',
+      shortlistCollection: 'car_shortlists',
+      title: 'Каталог автомобилей',
+      filterLayout: '2fr 1fr 1fr 1fr 1fr',
+      filters: {
+        search: { id: 'fSearch', placeholder: 'Поиск: название, марка, модель…', type: 'text' },
+        price: { id: 'fPrice', placeholder: 'Цена аренды: 50-200', type: 'text' },
+        bodyType: { id: 'fBodyType', placeholder: 'Тип кузова', type: 'select' },
+        brand: { id: 'fBrand', placeholder: 'Марка', type: 'select' },
+        city: { id: 'fCity', placeholder: 'Все города', type: 'select' }
+      }
     }
   };
 
   let activeCatalog = 'venues';  // текущий каталог
 
   // === refs для фильтров (объявляем заранее!)
-  let $fSearch, $fDistrict, $fCap, $fPrice, $fGender, $fGenres, $fLanguages, $fCity;
+  let $fSearch, $fDistrict, $fCap, $fPrice, $fGender, $fGenres, $fLanguages, $fCity, $fBodyType, $fBrand;
 
   // === GLOBALS ===
   let db, auth;
@@ -922,6 +938,8 @@
       $fGenres   = document.getElementById('fGenres');
       $fLanguages= document.getElementById('fLanguages');
       $fCity     = document.getElementById('fCity');
+      $fBodyType = document.getElementById('fBodyType');
+      $fBrand    = document.getElementById('fBrand');
       
       // Reset filtersBound flag to allow re-binding
       filtersBound = false;
@@ -963,6 +981,37 @@
         '<option value="">Все языки</option>' +
         langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
     }
+    
+    function populateBodyTypes(list) {
+      if (!$fBodyType) return;
+      const bodyTypes = Array.from(new Set(
+        list.flatMap(car => (car.cars || []).map(c => c.body_type).filter(Boolean))
+      )).sort();
+      $fBodyType.innerHTML =
+        '<option value="">Все типы кузова</option>' +
+        bodyTypes.map(bt => `<option value="${bt}">${bt}</option>`).join('');
+    }
+    
+    function populateBrands(list) {
+      if (!$fBrand) return;
+      const brands = Array.from(new Set(
+        list.flatMap(car => (car.cars || []).map(c => c.brand).filter(Boolean))
+      )).sort();
+      $fBrand.innerHTML =
+        '<option value="">Все марки</option>' +
+        brands.map(b => `<option value="${b}">${b}</option>`).join('');
+    }
+    
+    function populateCarCities(list) {
+      if (!$fCity) return;
+      const cities = Array.from(new Set(
+        list.flatMap(car => car.coverage_cities || [])
+      )).sort();
+      $fCity.innerHTML =
+        '<option value="">Все города</option>' +
+        cities.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+    
     function ensureDistrictValid(){
       if (!$fDistrict) return;
       const val = ($fDistrict.value||'').trim();
@@ -985,9 +1034,13 @@
       if ($fGender) $fGender.value = ps.get('gender') || '';
       if ($fGenres) $fGenres.value = ps.get('genre') || '';
       if ($fLanguages) $fLanguages.value = ps.get('lang') || '';
-      if ($fCity) $fCity.value = ps.get('city') || '';
       
-      // Цена общая
+      // Для cars
+      if ($fBodyType) $fBodyType.value = ps.get('bodyType') || '';
+      if ($fBrand) $fBrand.value = ps.get('brand') || '';
+      
+      // Общие
+      if ($fCity) $fCity.value = ps.get('city') || '';
       if ($fPrice) $fPrice.value = ps.get('price') || '';
     }
     function bindFilterEventsOnce(){
@@ -1099,6 +1152,72 @@
         gender ? params.set('gender', gender) : params.delete('gender');
         genre ? params.set('genre', genre) : params.delete('genre');
         lang ? params.set('lang', lang) : params.delete('lang');
+        city ? params.set('city', city) : params.delete('city');
+        const newUrl = `${location.pathname}?${params.toString()}`;
+        history.replaceState(null,'',newUrl);
+        
+      } else if (activeCatalog === 'cars') {
+        const [priceLo, priceHi] = parseRange(($fPrice?.value||'').trim());
+        const bodyType = ($fBodyType?.value || '').trim();
+        const brand = ($fBrand?.value || '').trim();
+        const city = ($fCity?.value || '').trim();
+        
+        console.log(`🔍 Applying filters for cars: q="${q}", bodyType="${bodyType}", brand="${brand}", city="${city}", price="${priceLo}-${priceHi}"`);
+        
+        _viewVenues = _allVenues.filter(car => {
+          // поиск
+          if (q) {
+            const carModels = Array.isArray(car.cars) ? car.cars.map(c => [c.brand, c.model].filter(Boolean).join(' ')).join(' ') : '';
+            const hay = [car.name, carModels, (car.tags||[]).join(' ')]
+              .filter(Boolean).join(' ').toLowerCase();
+            if (!hay.includes(q)) {
+              console.log(`❌ ${car.id} (${car.name}): filtered by search "${q}"`);
+              return false;
+            }
+          }
+          
+          // тип кузова
+          if (bodyType && Array.isArray(car.cars)) {
+            const hasBodyType = car.cars.some(c => c.body_type === bodyType);
+            if (!hasBodyType) {
+              console.log(`❌ ${car.id} (${car.name}): filtered by bodyType (need: ${bodyType})`);
+              return false;
+            }
+          }
+          
+          // марка
+          if (brand && Array.isArray(car.cars)) {
+            const hasBrand = car.cars.some(c => c.brand === brand);
+            if (!hasBrand) {
+              console.log(`❌ ${car.id} (${car.name}): filtered by brand (need: ${brand})`);
+              return false;
+            }
+          }
+          
+          // город
+          if (city && (!Array.isArray(car.coverage_cities) || !car.coverage_cities.includes(city))) {
+            console.log(`❌ ${car.id} (${car.name}): filtered by city (has: ${car.coverage_cities}, need: ${city})`);
+            return false;
+          }
+          
+          // цена
+          const basePrice = car.pricing?.price?.base;
+          const pMin = basePrice && !isNaN(basePrice) ? basePrice : NaN;
+          const pMax = pMin;
+          if (!priceMatches(pMin, pMax, priceLo, priceHi)) {
+            console.log(`❌ ${car.id} (${car.name}): filtered by price (has: ${pMin}, need: ${priceLo}-${priceHi})`);
+            return false;
+          }
+          
+          return true;
+        });
+        
+        // синхронизация в URL
+        const params = new URLSearchParams(location.search);
+        q ? params.set('q', q) : params.delete('q');
+        $fPrice?.value ? params.set('price', ($fPrice.value||'').trim()) : params.delete('price');
+        bodyType ? params.set('bodyType', bodyType) : params.delete('bodyType');
+        brand ? params.set('brand', brand) : params.delete('brand');
         city ? params.set('city', city) : params.delete('city');
         const newUrl = `${location.pathname}?${params.toString()}`;
         history.replaceState(null,'',newUrl);
@@ -1312,6 +1431,121 @@
       coverEl && (coverEl.style.cursor = pickMode ? 'pointer' : (allPhotoUrls.length ? 'zoom-in' : 'default'));
     }
 
+    // === РЕНДЕР КАРТОЧКИ АВТОМОБИЛЯ ===
+    function renderCarCard(car) {
+      // Получаем фото из media.photos или первый автомобиль в cars
+      let coverUrl = null;
+      if (Array.isArray(car.media?.photos) && car.media.photos.length) {
+        coverUrl = car.media.photos[0];
+      } else if (Array.isArray(car.cars) && car.cars.length && car.cars[0].media?.photos?.length) {
+        coverUrl = car.cars[0].media.photos[0];
+      }
+      
+      const svgPin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M12 22s7-5.33 7-12a7 7 0 10-14 0c0 6.67 7 12 7 12z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/>
+      </svg>`;
+      const svgMoney = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M3 7h18v10H3z" stroke="currentColor" stroke-width="1.7" fill="none"/>
+        <path d="M7 12h10M12 9v6" stroke="currentColor" stroke-width="1.7" />
+      </svg>`;
+      const svgCar = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M5 11l2-4h10l2 4M5 11v6h14v-6M5 11H3M19 11h2M7 17v1M17 17v1" stroke="currentColor" stroke-width="1.7"/>
+        <circle cx="7" cy="14" r="1.5" fill="currentColor"/>
+        <circle cx="17" cy="14" r="1.5" fill="currentColor"/>
+      </svg>`;
+      
+      // Цена из pricing
+      let priceText = '';
+      if (car.pricing) {
+        const base = car.pricing.price?.base;
+        const currency = car.pricing.currency || 'AZN';
+        const mode = car.pricing.mode || 'hourly';
+        if (base && !isNaN(base)) {
+          const modeLabel = mode === 'hourly' ? '/час' : mode === 'daily' ? '/день' : '';
+          priceText = `${fmt(base)} ${currency}${modeLabel}`;
+        }
+      }
+      
+      // Собираем автомобили (первые 3)
+      const carsInfo = [];
+      if (Array.isArray(car.cars)) {
+        car.cars.slice(0, 3).forEach(c => {
+          const brand = c.brand || '';
+          const model = c.model || '';
+          const bodyType = c.body_type || '';
+          const year = c.year || '';
+          let carLabel = [brand, model].filter(Boolean).join(' ');
+          if (bodyType) carLabel += ` (${bodyType})`;
+          if (year) carLabel += ` ${year}`;
+          if (carLabel) carsInfo.push(carLabel);
+        });
+      }
+      
+      const cityText = Array.isArray(car.coverage_cities) && car.coverage_cities.length 
+        ? car.coverage_cities.slice(0, 2).join(', ') 
+        : '';
+      
+      return `
+        ${coverUrl ? `<img class="img car-cover" src="${coverUrl}" alt="${car.name||''}" loading="lazy">` : `<div class="img car-cover"></div>`}
+        <div class="body">
+          <div style="margin-bottom:8px">
+            <div style="font-weight:600;font-size:18px">${car.name||'Без названия'}</div>
+          </div>
+          
+          <div style="font-size:14px;color:#64748b;display:grid;gap:4px;margin-bottom:10px">
+            ${cityText ? `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-flex;line-height:0;">${svgPin}</span>
+              <span>${cityText}</span>
+            </div>` : ''}
+            ${carsInfo.length ? `<div style="display:flex;align-items:flex-start;gap:6px;">
+              <span style="display:inline-flex;line-height:0;margin-top:2px;">${svgCar}</span>
+              <span>${carsInfo.join(' • ')}</span>
+            </div>` : ''}
+          </div>
+          
+          ${priceText ? `<div style="display:flex;align-items:center;gap:6px;font-size:18px;font-weight:700;color:#2563eb;margin-bottom:10px">
+            <span style="display:inline-flex;line-height:0;">${svgMoney}</span>
+            <span>${priceText}</span>
+          </div>` : ''}
+          
+          <div class="btns">
+            ${car.contact_person ? `<button class="btn car-contact">Контакт</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function bindCarCardActions(card, car) {
+      // Собираем все фото
+      const allPhotos = [];
+      if (Array.isArray(car.media?.photos)) {
+        allPhotos.push(...car.media.photos.filter(Boolean));
+      }
+      if (Array.isArray(car.cars)) {
+        car.cars.forEach(c => {
+          if (Array.isArray(c.media?.photos)) {
+            allPhotos.push(...c.media.photos.filter(Boolean));
+          }
+        });
+      }
+      
+      card.querySelector('.car-contact')?.addEventListener('click', () => {
+        if (!car.contact_person) return;
+        const name = car.contact_person || 'Контакт';
+        const phone = car.messengers?.whatsapp || car.phones?.[0] || '';
+        const msg = `Контакт:\n${name}${phone ? '\nТелефон: ' + phone : ''}`;
+        alert(msg);
+      });
+      
+      const coverEl = card.querySelector('.car-cover');
+      coverEl?.addEventListener('click', () => {
+        if (pickMode) return;
+        if (allPhotos.length) openGallery(allPhotos, 0);
+      });
+      coverEl && (coverEl.style.cursor = pickMode ? 'pointer' : (allPhotos.length ? 'zoom-in' : 'default'));
+    }
+
     // ---- РЕНДЕР карточек
     function render(items, meta){
       window.__lastVenues = items;
@@ -1339,6 +1573,8 @@
             cardHtml = renderVenueCard(item);
           } else if (activeCatalog === 'singers') {
             cardHtml = renderSingerCard(item);
+          } else if (activeCatalog === 'cars') {
+            cardHtml = renderCarCard(item);
           }
           
           if (!cardHtml) {
@@ -1377,6 +1613,8 @@
             bindVenueCardActions(card, item);
           } else if (activeCatalog === 'singers') {
             bindSingerCardActions(card, item);
+          } else if (activeCatalog === 'cars') {
+            bindCarCardActions(card, item);
           }
 
           // подсветка выбранных
@@ -1450,6 +1688,10 @@
         populateCities(_allVenues);
         populateGenres(_allVenues);
         populateLanguages(_allVenues);
+      } else if (catalog === 'cars') {
+        populateBodyTypes(_allVenues);
+        populateBrands(_allVenues);
+        populateCarCities(_allVenues);
       }
       
       // Restore filters from URL (теперь элементы уже существуют)
@@ -1505,6 +1747,10 @@
         populateCities(_allVenues);
         populateGenres(_allVenues);
         populateLanguages(_allVenues);
+      } else if (catalog === 'cars') {
+        populateBodyTypes(_allVenues);
+        populateBrands(_allVenues);
+        populateCarCities(_allVenues);
       }
       
       restoreFiltersFromURL();
