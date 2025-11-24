@@ -1257,17 +1257,27 @@
       if (!config) return;
       
       $status.textContent = 'Загрузка данных из Firebase…';
-      const snap = await getDocs(collection(db, COL[config.collection]));
+      const collectionName = COL[config.collection];
+      console.log(`Loading catalog: ${catalog}, collection: ${collectionName}`);
+      
+      const snap = await getDocs(collection(db, collectionName));
       const items = [];
       snap.forEach(d => {
         const data = d.data();
         // Для певцов фильтруем только published
-        if (catalog === 'singers' && data.status !== 'published') return;
+        if (catalog === 'singers' && data.status !== 'published') {
+          console.log(`Skipping singer ${d.id}: status = ${data.status}`);
+          return;
+        }
         items.push({ id: d.id, ...data });
       });
-      $status.textContent = '';
+      
+      console.log(`Loaded ${items.length} items for catalog ${catalog}`);
+      $status.textContent = items.length === 0 ? `Нет данных в каталоге ${config.title}` : '';
 
+      // ВАЖНО: всегда обновляем _allVenues, даже если items пустой
       _allVenues = items.slice();
+      _viewVenues = [];
       
       // Populate dynamic filters
       if (catalog === 'venues') {
