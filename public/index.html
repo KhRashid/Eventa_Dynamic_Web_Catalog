@@ -1201,6 +1201,8 @@
       window.__lastVenues = items;
       window.__lastMeta   = meta || null;
 
+      console.log(`🎨 Rendering ${items.length} items for catalog: ${activeCatalog}`);
+      
       $grid.innerHTML = '';
       $status.innerHTML = '';
       if (meta?.note || meta?.expires_at) {
@@ -1212,51 +1214,66 @@
       if (!items.length) { $empty.style.display='block'; return; }
       $empty.style.display='none';
 
+      let renderedCount = 0;
       for (const item of items) {
-        let cardHtml = '';
-        
-        if (activeCatalog === 'venues') {
-          cardHtml = renderVenueCard(item);
-        } else if (activeCatalog === 'singers') {
-          cardHtml = renderSingerCard(item);
-        }
-        
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = cardHtml;
+        try {
+          let cardHtml = '';
+          
+          if (activeCatalog === 'venues') {
+            cardHtml = renderVenueCard(item);
+          } else if (activeCatalog === 'singers') {
+            cardHtml = renderSingerCard(item);
+          }
+          
+          if (!cardHtml) {
+            console.warn(`⚠️ Empty card HTML for ${activeCatalog} ${item.id}`);
+            continue;
+          }
+          
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = cardHtml;
 
-        // выбор
-        if (pickMode) {
-          const dot = document.createElement('div');
-          dot.className = 'select-dot';
-          dot.textContent = selected.has(item.id) ? '✓' : '';
-          dot.addEventListener('click', (e)=>{
-            e.stopPropagation();
-            if (selected.has(item.id)) selected.delete(item.id); else selected.add(item.id);
+          // выбор
+          if (pickMode) {
+            const dot = document.createElement('div');
+            dot.className = 'select-dot';
             dot.textContent = selected.has(item.id) ? '✓' : '';
-            card.classList.toggle('sel', selected.has(item.id));
-            $selCount.textContent = 'Выбрано: ' + selected.size;
-            $genBtn.disabled = selected.size === 0;
-          });
-          const wrap = document.createElement('div');
-          wrap.className = 'card-wrap';
-          wrap.appendChild(card);
-          wrap.appendChild(dot);
-          $grid.appendChild(wrap);
-        } else {
-          $grid.appendChild(card);
-        }
+            dot.addEventListener('click', (e)=>{
+              e.stopPropagation();
+              if (selected.has(item.id)) selected.delete(item.id); else selected.add(item.id);
+              dot.textContent = selected.has(item.id) ? '✓' : '';
+              card.classList.toggle('sel', selected.has(item.id));
+              $selCount.textContent = 'Выбрано: ' + selected.size;
+              $genBtn.disabled = selected.size === 0;
+            });
+            const wrap = document.createElement('div');
+            wrap.className = 'card-wrap';
+            wrap.appendChild(card);
+            wrap.appendChild(dot);
+            $grid.appendChild(wrap);
+          } else {
+            $grid.appendChild(card);
+          }
 
-        // Bind card actions
-        if (activeCatalog === 'venues') {
-          bindVenueCardActions(card, item);
-        } else if (activeCatalog === 'singers') {
-          bindSingerCardActions(card, item);
-        }
+          // Bind card actions
+          if (activeCatalog === 'venues') {
+            bindVenueCardActions(card, item);
+          } else if (activeCatalog === 'singers') {
+            bindSingerCardActions(card, item);
+          }
 
-        // подсветка выбранных
-        card.classList.toggle('sel', selected.has(item.id));
+          // подсветка выбранных
+          card.classList.toggle('sel', selected.has(item.id));
+          
+          renderedCount++;
+        } catch (error) {
+          console.error(`❌ Error rendering ${activeCatalog} ${item.id}:`, error);
+          console.error('Item data:', item);
+        }
       }
+      
+      console.log(`✅ Successfully rendered ${renderedCount} out of ${items.length} cards`);
     }
 
     // ---- ЗАГРУЗКА ДАННЫХ
