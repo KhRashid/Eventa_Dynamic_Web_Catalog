@@ -593,54 +593,72 @@
     const $modal = document.getElementById('contactsModal');
     const $body = document.getElementById('contactsBody');
     
-    const socialLabels = {
-      instagram: 'Instagram',
-      facebook: 'Facebook',
-      youtube: 'YouTube',
-      tiktok: 'TikTok',
-      twitter: 'Twitter / X',
-      vk: 'ВКонтакте',
-      telegram: 'Telegram'
+    const socialData = {
+      instagram: { label: 'Instagram', icon: 'https://cdn-icons-png.flaticon.com/512/174/174855.png', bg: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' },
+      facebook: { label: 'Facebook', icon: 'https://cdn-icons-png.flaticon.com/512/124/124010.png', bg: '#1877f2' },
+      youtube: { label: 'YouTube', icon: 'https://cdn-icons-png.flaticon.com/512/1384/1384060.png', bg: '#ff0000' },
+      tiktok: { label: 'TikTok', icon: 'https://cdn-icons-png.flaticon.com/512/3046/3046121.png', bg: '#000000' },
+      twitter: { label: 'Twitter', icon: 'https://cdn-icons-png.flaticon.com/512/124/124021.png', bg: '#1da1f2' },
+      vk: { label: 'ВКонтакте', icon: 'https://cdn-icons-png.flaticon.com/512/145/145813.png', bg: '#0077ff' },
+      telegram: { label: 'Telegram', icon: 'https://cdn-icons-png.flaticon.com/512/2111/2111646.png', bg: '#0088cc' }
     };
     
-    let html = '<div style="display:grid;gap:1px;background:#e5e7eb;border-radius:10px;overflow:hidden">';
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;padding:8px">';
     
     if (singer.contact_public && typeof singer.contact_public === 'object') {
       const entries = Object.entries(singer.contact_public).filter(([k, v]) => v);
       
       if (entries.length === 0) {
-        html += '<p style="color:#6b7280;text-align:center;padding:24px;background:#fff;margin:0">Соцсети не указаны</p>';
+        html += '<p style="color:#6b7280;text-align:center;padding:24px;grid-column:1/-1;margin:0">Соцсети не указаны</p>';
       } else {
         entries.forEach(([key, val]) => {
-          const displayName = socialLabels[key.toLowerCase()] || (key.charAt(0).toUpperCase() + key.slice(1));
+          const data = socialData[key.toLowerCase()] || { 
+            label: key.charAt(0).toUpperCase() + key.slice(1), 
+            icon: 'https://cdn-icons-png.flaticon.com/512/1384/1384005.png',
+            bg: '#64748b'
+          };
           
           html += `
             <a href="${val}" target="_blank" rel="noopener noreferrer" 
                style="
                  display:flex;
+                 flex-direction:column;
                  align-items:center;
-                 justify-content:space-between;
-                 gap:12px;
-                 padding:16px 18px;
+                 gap:10px;
+                 padding:20px 16px;
                  background:#ffffff;
+                 border:1px solid #e5e7eb;
+                 border-radius:12px;
                  text-decoration:none;
                  color:#0f172a;
                  font-weight:500;
-                 transition:background 0.15s;
+                 font-size:14px;
+                 text-align:center;
+                 transition:all 0.2s;
+                 box-shadow:0 1px 2px rgba(0,0,0,0.05);
                "
-               onmouseover="this.style.background='#f8fafc'"
-               onmouseout="this.style.background='#ffffff'"
+               onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.1)';this.style.borderColor='#cbd5e1'"
+               onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.05)';this.style.borderColor='#e5e7eb'"
             >
-              <span style="font-size:15px;color:#334155">${displayName}</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
-                <path d="M6 3L11 8L6 13" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+              <div style="
+                width:48px;
+                height:48px;
+                border-radius:12px;
+                background:${data.bg};
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                padding:10px;
+              ">
+                <img src="${data.icon}" alt="${data.label}" style="width:100%;height:100%;object-fit:contain;filter:brightness(0) invert(1)">
+              </div>
+              <span style="color:#334155">${data.label}</span>
             </a>
           `;
         });
       }
     } else {
-      html += '<p style="color:#6b7280;text-align:center;padding:24px;background:#fff;margin:0">Соцсети не указаны</p>';
+      html += '<p style="color:#6b7280;text-align:center;padding:24px;grid-column:1/-1;margin:0">Соцсети не указаны</p>';
     }
     
     html += '</div>';
