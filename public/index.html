@@ -948,29 +948,49 @@
         const lang = ($fLanguages?.value || '').trim();
         const city = ($fCity?.value || '').trim();
         
+        console.log(`🔍 Applying filters: q="${q}", gender="${gender}", genre="${genre}", lang="${lang}", city="${city}", price="${priceLo}-${priceHi}"`);
+        
         _viewVenues = _allVenues.filter(s => {
           // поиск
           if (q) {
             const hay = [s.name, (s.aliases||[]).join(' '), (s.tags||[]).join(' '), (s.genres||[]).join(' ')]
               .filter(Boolean).join(' ').toLowerCase();
-            if (!hay.includes(q)) return false;
+            if (!hay.includes(q)) {
+              console.log(`❌ ${s.id} (${s.name}): filtered by search "${q}"`);
+              return false;
+            }
           }
           
           // пол
-          if (gender && s.gender !== gender) return false;
+          if (gender && s.gender !== gender) {
+            console.log(`❌ ${s.id} (${s.name}): filtered by gender (has: ${s.gender}, need: ${gender})`);
+            return false;
+          }
           
           // жанр
-          if (genre && (!Array.isArray(s.genres) || !s.genres.includes(genre))) return false;
+          if (genre && (!Array.isArray(s.genres) || !s.genres.includes(genre))) {
+            console.log(`❌ ${s.id} (${s.name}): filtered by genre (has: ${s.genres}, need: ${genre})`);
+            return false;
+          }
           
           // язык
-          if (lang && (!Array.isArray(s.languages) || !s.languages.includes(lang))) return false;
+          if (lang && (!Array.isArray(s.languages) || !s.languages.includes(lang))) {
+            console.log(`❌ ${s.id} (${s.name}): filtered by language (has: ${s.languages}, need: ${lang})`);
+            return false;
+          }
           
           // город
-          if (city && s.city !== city) return false;
+          if (city && s.city !== city) {
+            console.log(`❌ ${s.id} (${s.name}): filtered by city (has: ${s.city}, need: ${city})`);
+            return false;
+          }
           
           // цена
           const {min: pMin, max: pMax} = getSingerPrice(s);
-          if (!priceMatches(pMin, pMax, priceLo, priceHi)) return false;
+          if (!priceMatches(pMin, pMax, priceLo, priceHi)) {
+            console.log(`❌ ${s.id} (${s.name}): filtered by price (has: ${pMin}-${pMax}, need: ${priceLo}-${priceHi})`);
+            return false;
+          }
           
           return true;
         });
