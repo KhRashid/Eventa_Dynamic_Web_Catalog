@@ -1270,17 +1270,20 @@
       
       const snap = await getDocs(collection(db, collectionName));
       const items = [];
+      let skippedCount = 0;
       snap.forEach(d => {
         const data = d.data();
         // Для певцов фильтруем только published
         if (catalog === 'singers' && data.status !== 'published') {
-          console.log(`Skipping singer ${d.id}: status = ${data.status}`);
+          console.log(`❌ Skipping singer ${d.id}: status = "${data.status}" (not "published")`);
+          skippedCount++;
           return;
         }
+        console.log(`✅ Adding ${catalog} ${d.id}: status = ${data.status || 'N/A'}`);
         items.push({ id: d.id, ...data });
       });
       
-      console.log(`Loaded ${items.length} items for catalog ${catalog}`);
+      console.log(`Loaded ${items.length} items for catalog ${catalog} (skipped: ${skippedCount})`);
       $status.textContent = items.length === 0 ? `Нет данных в каталоге ${config.title}` : '';
 
       // ВАЖНО: всегда обновляем _allVenues, даже если items пустой
